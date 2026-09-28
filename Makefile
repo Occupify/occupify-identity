@@ -1,3 +1,5 @@
+COMPOSE ?= podman compose
+
 .PHONY: help up infra down
 
 infra: 
