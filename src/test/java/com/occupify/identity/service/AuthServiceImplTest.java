@@ -209,6 +209,22 @@ class AuthServiceImplTest {
     }
 
     @Test
+    void shouldFailForgotPasswordWhenNotificationDispatchFails() {
+        ForgotPasswordRequest request = new ForgotPasswordRequest("user@occupify.com");
+        when(userRepository.existsByEmail("user@occupify.com")).thenReturn(Mono.just(true));
+        when(otpService.generateAndStoreOtp("user@occupify.com")).thenReturn(Mono.just("123456"));
+        when(notificationClient.sendPasswordResetOtp("user@occupify.com", "123456"))
+                .thenReturn(Mono.error(new AuthException(AuthErrorCode.AUTH_011)));
+
+        StepVerifier.create(authService.forgotPassword(request))
+                .expectErrorMatches(throwable -> throwable instanceof AuthException authEx
+                        && authEx.getErrorCode() == AuthErrorCode.AUTH_011)
+                .verify();
+
+        verify(notificationClient).sendPasswordResetOtp("user@occupify.com", "123456");
+    }
+
+    @Test
     void shouldResetPasswordAndRevokeAllSessions() {
         ResetPasswordRequest request = new ResetPasswordRequest("user@occupify.com", "123456", "NewPassword789!");
         User user = new User(UUID.randomUUID(), "user@occupify.com", "old-pass", "USER", "ACTIVE", Instant.now(), Instant.now());

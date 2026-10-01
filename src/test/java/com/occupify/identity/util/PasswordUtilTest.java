@@ -42,7 +42,6 @@ class PasswordUtilTest {
     void shouldVerifyBcryptHashForPassword123() {
         BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
         String hash = encoder.encode("password123");
-        System.out.println("BCRYPT_HASH_PASSWORD123=" + hash);
         assertTrue(encoder.matches("password123", hash));
     }
 }
