@@ -73,6 +73,7 @@ public class GatewayErrorResponseWriter {
                 + "\"status\":" + response.status() + ","
                 + "\"error\":\"" + escapeJson(response.error()) + "\","
                 + "\"message\":\"" + escapeJson(response.message()) + "\","
+                + (response.errorCode() != null ? "\"errorCode\":\"" + escapeJson(response.errorCode()) + "\"," : "")
                 + "\"path\":\"" + escapeJson(response.path()) + "\","
                 + "\"correlationId\":\"" + escapeJson(response.correlationId()) + "\"}";
         return json.getBytes(StandardCharsets.UTF_8);
