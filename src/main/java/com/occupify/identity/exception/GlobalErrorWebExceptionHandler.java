@@ -1,82 +1,77 @@
 package com.occupify.identity.exception;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.occupify.identity.filter.CorrelationIdFilter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.web.reactive.error.ErrorWebExceptionHandler;
 import org.springframework.core.annotation.Order;
-import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
-import org.springframework.http.MediaType;
-import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 import java.net.ConnectException;
-import java.nio.charset.StandardCharsets;
 
 @Component
-@Order(-2)
+@Order(GlobalErrorWebExceptionHandler.ORDER)
 public class GlobalErrorWebExceptionHandler implements ErrorWebExceptionHandler {
 
-    private static final Logger log = LoggerFactory.getLogger(GlobalErrorWebExceptionHandler.class);
+    // Higher precedence than default Spring WebFlux ErrorWebExceptionHandler (ORDER = -1)
+    public static final int ORDER = -2;
 
-    private final ObjectMapper objectMapper;
+    private static final Logger log = LoggerFactory.getLogger(GlobalErrorWebExceptionHandler.class);
+    private static final String DEFAULT_DOWNSTREAM_OFFLINE_MSG = "Downstream microservice is unreachable or offline";
+    private static final String DEFAULT_UNEXPECTED_ERROR_MSG = "Unexpected gateway error";
+
+    private final GatewayErrorResponseWriter responseWriter;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public GlobalErrorWebExceptionHandler(GatewayErrorResponseWriter responseWriter) {
+        this.responseWriter = responseWriter;
+    }
 
     public GlobalErrorWebExceptionHandler(ObjectMapper objectMapper) {
-        this.objectMapper = objectMapper;
+        this(new GatewayErrorResponseWriter(objectMapper));
     }
 
     @Override
     public Mono<Void> handle(ServerWebExchange exchange, Throwable ex) {
-        ServerHttpResponse response = exchange.getResponse();
-
-        if (response.isCommitted()) {
+        if (exchange.getResponse().isCommitted()) {
             return Mono.error(ex);
         }
 
-        response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
+        ErrorDetails details = resolveErrorDetails(ex);
+        logError(exchange, details, ex);
 
-        HttpStatusCode status = HttpStatus.INTERNAL_SERVER_ERROR;
-        String message = ex.getMessage();
+        return responseWriter.writeError(exchange, details.status(), details.message());
+    }
 
+    private ErrorDetails resolveErrorDetails(Throwable ex) {
         if (ex instanceof ResponseStatusException rse) {
-            status = rse.getStatusCode();
-            message = rse.getReason() != null ? rse.getReason() : rse.getMessage();
-        } else if (ex instanceof ConnectException) {
-            status = HttpStatus.SERVICE_UNAVAILABLE;
-            message = "Downstream microservice is unreachable or offline";
+            String reason = rse.getReason() != null ? rse.getReason() : rse.getMessage();
+            return new ErrorDetails(rse.getStatusCode(), reason);
         }
+        if (ex instanceof ConnectException) {
+            return new ErrorDetails(HttpStatus.SERVICE_UNAVAILABLE, DEFAULT_DOWNSTREAM_OFFLINE_MSG);
+        }
+        return new ErrorDetails(HttpStatus.INTERNAL_SERVER_ERROR, DEFAULT_UNEXPECTED_ERROR_MSG);
+    }
 
-        response.setStatusCode(status);
-
+    private void logError(ServerWebExchange exchange, ErrorDetails details, Throwable ex) {
         String path = exchange.getRequest().getURI().getPath();
-        String correlationId = exchange.getAttribute(CorrelationIdFilter.CORRELATION_ID_ATTRIBUTE);
+        String correlationId = responseWriter.resolveCorrelationId(exchange);
 
-        log.error("[Corr-{}] Gateway error handling request for [{}]: Status {} - {}",
-                correlationId != null ? correlationId : "unknown", path, status.value(), message, ex);
-
-        GatewayErrorResponse errorResponse = GatewayErrorResponse.of(
-                status.value(),
-                (status instanceof HttpStatus hs) ? hs.getReasonPhrase() : status.toString(),
-                message != null ? message : "Unexpected gateway error",
-                path,
-                correlationId != null ? correlationId : "unknown"
-        );
-
-        byte[] bytes;
-        try {
-            bytes = objectMapper.writeValueAsBytes(errorResponse);
-        } catch (JsonProcessingException e) {
-            bytes = ("{\"status\":" + status.value() + ",\"error\":\"Gateway Error\",\"message\":\"" + message + "\"}").getBytes(StandardCharsets.UTF_8);
+        if (details.status().is5xxServerError()) {
+            log.error("[Corr-{}] Server error handling request for [{}]: Status {} - {}",
+                    correlationId, path, details.status().value(), details.message(), ex);
+        } else {
+            log.warn("[Corr-{}] Client error handling request for [{}]: Status {} - {}",
+                    correlationId, path, details.status().value(), details.message());
         }
+    }
 
-        DataBuffer buffer = response.bufferFactory().wrap(bytes);
-        return response.writeWith(Mono.just(buffer));
+    private record ErrorDetails(HttpStatusCode status, String message) {
     }
 }
