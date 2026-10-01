@@ -19,6 +19,7 @@ spring:
     init:
       mode: always
       schema-locations: classpath:schema.sql
+      data-locations: classpath:seeddata.sql
   # --- Reactive Redis Configuration ---
   data:
     redis:
@@ -86,8 +87,21 @@ management:
 app:
   security:
     whitelisted-paths:
-      - /auth/**
+      - /auth/register
+      - /auth/login
+      - /auth/refresh-token
+      - /auth/signout
+      - /auth/forget-password
+      - /auth/reset-password
       - /actuator/**
+      - /v3/api-docs/**
+      - /swagger-ui/**
+      - /swagger-ui.html
+      - /webjars/**
+      - /scalar/**
+      - /scalar
+      - /docs/**
+      - /docs
     admin-restricted-paths:
       - /admin/**
       - /audit-logs/**
