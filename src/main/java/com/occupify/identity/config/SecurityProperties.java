@@ -11,8 +11,21 @@ import java.util.List;
 public class SecurityProperties {
 
     private List<String> whitelistedPaths = new ArrayList<>(List.of(
-            "/auth/**",
-            "/actuator/**"
+            "/auth/register",
+            "/auth/login",
+            "/auth/refresh-token",
+            "/auth/signout",
+            "/auth/forget-password",
+            "/auth/reset-password",
+            "/actuator/**",
+            "/v3/api-docs/**",
+            "/swagger-ui/**",
+            "/swagger-ui.html",
+            "/webjars/**",
+            "/scalar/**",
+            "/scalar",
+            "/docs/**",
+            "/docs"
     ));
 
     private List<String> adminRestrictedPaths = new ArrayList<>(List.of(
