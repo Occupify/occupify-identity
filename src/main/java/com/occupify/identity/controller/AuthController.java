@@ -6,8 +6,11 @@ import com.occupify.identity.dto.request.ForgotPasswordRequest;
 import com.occupify.identity.dto.request.LoginRequest;
 import com.occupify.identity.dto.request.RegisterRequest;
 import com.occupify.identity.dto.request.ResetPasswordRequest;
+import com.occupify.identity.dto.request.SendOtpRequest;
+import com.occupify.identity.dto.request.VerifyOtpRequest;
 import com.occupify.identity.dto.response.ApiResponse;
 import com.occupify.identity.dto.response.AuthResponse;
+import com.occupify.identity.dto.response.RegisterResponse;
 import com.occupify.identity.dto.response.TokenRefreshResponse;
 import com.occupify.identity.exception.AuthErrorCode;
 import com.occupify.identity.exception.AuthException;
@@ -47,9 +50,39 @@ public class AuthController {
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Register user")
-    public Mono<ApiResponse<AuthResponse>> register(@Valid @RequestBody RegisterRequest request) {
+    public Mono<ApiResponse<RegisterResponse>> register(@Valid @RequestBody RegisterRequest request) {
         return authService.register(request)
-                .map(data -> ApiResponse.created("Account registered successfully", data));
+                .map(data -> ApiResponse.created("Account registered successfully. Please verify OTP sent to your email.", data));
+    }
+
+    @PostMapping("/send-otp")
+    @Operation(
+            summary = "Send OTP",
+            description = "Dispatch a 6-digit verification OTP to the user's email for registration activation or password reset"
+    )
+    public Mono<ApiResponse<Void>> sendOtp(@Valid @RequestBody SendOtpRequest request) {
+        return authService.sendOtp(request)
+                .thenReturn(ApiResponse.ok("OTP sent to your email successfully"));
+    }
+
+    @PostMapping("/resend-otp")
+    @Operation(
+            summary = "Resend OTP",
+            description = "Resend a new 6-digit verification OTP to the user's email subject to cooldown restrictions"
+    )
+    public Mono<ApiResponse<Void>> resendOtp(@Valid @RequestBody SendOtpRequest request) {
+        return authService.resendOtp(request)
+                .thenReturn(ApiResponse.ok("OTP resent to your email successfully"));
+    }
+
+    @PostMapping("/verify-otp")
+    @Operation(
+            summary = "Verify OTP",
+            description = "Verify submitted OTP code: activates account and returns auth tokens for REGISTER, or returns a reset token for FORGOT_PASSWORD"
+    )
+    public Mono<ApiResponse<Object>> verifyOtp(@Valid @RequestBody VerifyOtpRequest request) {
+        return authService.verifyOtp(request)
+                .map(data -> ApiResponse.ok("OTP verified successfully", data));
     }
 
     @PostMapping("/login")

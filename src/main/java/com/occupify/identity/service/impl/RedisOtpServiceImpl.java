@@ -2,6 +2,7 @@ package com.occupify.identity.service.impl;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.occupify.identity.enums.OtpType;
 import com.occupify.identity.exception.AuthErrorCode;
 import com.occupify.identity.exception.AuthException;
 import com.occupify.identity.service.OtpService;
@@ -15,12 +16,16 @@ import reactor.core.publisher.Mono;
 
 import java.security.SecureRandom;
 import java.time.Duration;
+import java.util.UUID;
 
 @Service
 public class RedisOtpServiceImpl implements OtpService {
 
     private static final Logger log = LoggerFactory.getLogger(RedisOtpServiceImpl.class);
-    private static final String KEY_PREFIX_OTP = "password_reset_otp:";
+    private static final String KEY_PREFIX_REGISTER = "otp:register:";
+    private static final String KEY_PREFIX_FORGOT_PASSWORD = "otp:forgot_password:";
+    private static final String KEY_PREFIX_RESET_TOKEN = "password_reset_token:";
+    private static final Duration RESET_TOKEN_TTL = Duration.ofMinutes(10);
 
     private final ReactiveRedisOperations<String, String> redisTemplate;
     private final PasswordEncoder passwordEncoder;
@@ -50,27 +55,70 @@ public class RedisOtpServiceImpl implements OtpService {
     }
 
     @Override
-    public Mono<String> generateAndStoreOtp(String email) {
+    public Mono<String> generateAndStoreOtp(String email, OtpType type) {
         if (email == null || email.isBlank()) {
             return Mono.error(new AuthException(AuthErrorCode.AUTH_000));
         }
-
-        String key = buildOtpKey(email);
+        OtpType resolvedType = type != null ? type : OtpType.FORGOT_PASSWORD;
+        String key = buildOtpKey(email, resolvedType);
         return fetchExistingOtp(key)
                 .flatMap(this::checkCooldown)
-                .then(Mono.defer(() -> createAndSaveOtp(key, email)));
+                .then(Mono.defer(() -> createAndSaveOtp(key, email, resolvedType)));
     }
 
     @Override
-    public Mono<Void> verifyOtp(String email, String rawOtp) {
+    public Mono<Void> verifyOtp(String email, String rawOtp, OtpType type) {
         if (email == null || email.isBlank() || rawOtp == null || rawOtp.isBlank()) {
             return Mono.error(new AuthException(AuthErrorCode.AUTH_009));
         }
-
-        String key = buildOtpKey(email);
+        OtpType resolvedType = type != null ? type : OtpType.FORGOT_PASSWORD;
+        String key = buildOtpKey(email, resolvedType);
         return fetchExistingOtp(key)
                 .switchIfEmpty(Mono.error(new AuthException(AuthErrorCode.AUTH_008)))
                 .flatMap(otpData -> processOtpVerification(key, otpData, rawOtp));
+    }
+
+    @Override
+    public Mono<String> createPasswordResetToken(String email) {
+        if (email == null || email.isBlank()) {
+            return Mono.error(new AuthException(AuthErrorCode.AUTH_000));
+        }
+        String normalizedEmail = email.trim().toLowerCase();
+        String resetToken = UUID.randomUUID().toString();
+        String key = KEY_PREFIX_RESET_TOKEN + resetToken;
+
+        return redisTemplate.opsForValue()
+                .set(key, normalizedEmail, RESET_TOKEN_TTL)
+                .doOnSuccess(v -> log.info("Generated reset token for user [{}]", maskEmail(normalizedEmail)))
+                .thenReturn(resetToken);
+    }
+
+    @Override
+    public Mono<String> validatePasswordResetToken(String email, String resetToken) {
+        if (resetToken == null || resetToken.isBlank() || email == null || email.isBlank()) {
+            return Mono.error(new AuthException(AuthErrorCode.AUTH_016));
+        }
+        String normalizedEmail = email.trim().toLowerCase();
+        String key = KEY_PREFIX_RESET_TOKEN + resetToken.trim();
+
+        return redisTemplate.opsForValue().get(key)
+                .switchIfEmpty(Mono.error(new AuthException(AuthErrorCode.AUTH_016)))
+                .flatMap(storedEmail -> {
+                    if (!normalizedEmail.equalsIgnoreCase(storedEmail)) {
+                        log.warn("Reset token email mismatch: expected [{}], found [{}]",
+                                maskEmail(normalizedEmail), maskEmail(storedEmail));
+                        return Mono.error(new AuthException(AuthErrorCode.AUTH_016));
+                    }
+                    return Mono.just(storedEmail);
+                });
+    }
+
+    @Override
+    public Mono<Void> deletePasswordResetToken(String resetToken) {
+        if (resetToken == null || resetToken.isBlank()) {
+            return Mono.empty();
+        }
+        return redisTemplate.delete(KEY_PREFIX_RESET_TOKEN + resetToken.trim()).then();
     }
 
     private Mono<Void> checkCooldown(OtpData existingData) {
@@ -81,7 +129,7 @@ public class RedisOtpServiceImpl implements OtpService {
         return Mono.empty();
     }
 
-    private Mono<String> createAndSaveOtp(String key, String email) {
+    private Mono<String> createAndSaveOtp(String key, String email, OtpType type) {
         String rawOtp = generateNumericOtp(otpLength);
         String hashedOtp = passwordEncoder.encode(rawOtp);
         OtpData otpData = new OtpData(hashedOtp, 0, System.currentTimeMillis());
@@ -89,7 +137,7 @@ public class RedisOtpServiceImpl implements OtpService {
         try {
             String json = objectMapper.writeValueAsString(otpData);
             return redisTemplate.opsForValue().set(key, json, expirationDuration)
-                    .doOnSuccess(v -> log.info("Generated password reset OTP for user [{}]", maskEmail(email)))
+                    .doOnSuccess(v -> log.info("Generated {} OTP for user [{}]", type, maskEmail(email)))
                     .thenReturn(rawOtp);
         } catch (JsonProcessingException e) {
             log.error("Failed to serialize OTP data for [{}]: {}", maskEmail(email), e.getMessage());
@@ -151,8 +199,9 @@ public class RedisOtpServiceImpl implements OtpService {
         return sb.toString();
     }
 
-    private String buildOtpKey(String email) {
-        return KEY_PREFIX_OTP + email.trim().toLowerCase();
+    private String buildOtpKey(String email, OtpType type) {
+        String prefix = type == OtpType.REGISTER ? KEY_PREFIX_REGISTER : KEY_PREFIX_FORGOT_PASSWORD;
+        return prefix + email.trim().toLowerCase();
     }
 
     private String maskEmail(String email) {

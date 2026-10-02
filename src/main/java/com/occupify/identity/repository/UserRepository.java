@@ -19,4 +19,8 @@ public interface UserRepository extends R2dbcRepository<User, UUID> {
     @Modifying
     @Query("UPDATE users SET password = :password, updated_at = CURRENT_TIMESTAMP WHERE email = :email")
     Mono<Integer> updatePasswordByEmail(String email, String password);
+
+    @Modifying
+    @Query("UPDATE users SET status = :status, updated_at = CURRENT_TIMESTAMP WHERE email = :email")
+    Mono<Integer> updateStatusByEmail(String email, String status);
 }
