@@ -166,4 +166,14 @@ class RedisOtpServiceImplTest {
         StepVerifier.create(otpService.deletePasswordResetToken("valid-token"))
                 .verifyComplete();
     }
+
+    @Test
+    void shouldThrowAuthExceptionWhenOtpJsonIsCorrupted() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get(anyString())).thenReturn(Mono.just("{invalid-json}"));
+
+        StepVerifier.create(otpService.verifyOtp("user@occupify.com", "123456", OtpType.REGISTER))
+                .expectErrorMatches(ex -> ex instanceof AuthException ae && ae.getErrorCode() == AuthErrorCode.AUTH_011)
+                .verify();
+    }
 }

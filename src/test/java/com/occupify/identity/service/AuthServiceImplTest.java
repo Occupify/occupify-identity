@@ -384,4 +384,39 @@ class AuthServiceImplTest {
                 .expectErrorMatches(ex -> ex instanceof AuthException ae && ae.getErrorCode() == AuthErrorCode.AUTH_013)
                 .verify();
     }
+
+    @Test
+    void shouldThrowWhenUpdateStatusAffectsZeroRowsDuringRegistrationOtpVerification() {
+        VerifyOtpRequest request = new VerifyOtpRequest("user@occupify.com", "123456", OtpType.REGISTER);
+        UUID userId = UUID.randomUUID();
+        User user = new User(userId, "user@occupify.com", "pass", "USER", "INACTIVE", Instant.now(), Instant.now());
+
+        when(userRepository.findByEmail("user@occupify.com")).thenReturn(Mono.just(user));
+        when(otpService.verifyOtp("user@occupify.com", "123456", OtpType.REGISTER)).thenReturn(Mono.empty());
+        when(userRepository.updateStatusByEmail("user@occupify.com", "ACTIVE")).thenReturn(Mono.just(0));
+
+        StepVerifier.create(authService.verifyOtp(request))
+                .expectErrorMatches(ex -> ex instanceof AuthException ae && ae.getErrorCode() == AuthErrorCode.USER_001)
+                .verify();
+
+        verify(sessionService, never()).saveSession(anyString(), any(), anyString());
+    }
+
+    @Test
+    void shouldThrowWhenPasswordUpdateAffectsZeroRowsOnChangePassword() {
+        ChangePasswordRequest request = new ChangePasswordRequest("CurrentPass123!", "NewPass456789!");
+        User user = new User(UUID.randomUUID(), "user@occupify.com", "hashed-current-pass", "USER", "ACTIVE",
+                Instant.now(), Instant.now());
+
+        when(userRepository.findByEmail("user@occupify.com")).thenReturn(Mono.just(user));
+        when(passwordEncoder.matches("CurrentPass123!", "hashed-current-pass")).thenReturn(true);
+        when(passwordEncoder.encode("NewPass456789!")).thenReturn("hashed-new-pass");
+        when(userRepository.updatePasswordByEmail("user@occupify.com", "hashed-new-pass")).thenReturn(Mono.just(0));
+
+        StepVerifier.create(authService.changePassword("user@occupify.com", request))
+                .expectErrorMatches(ex -> ex instanceof AuthException ae && ae.getErrorCode() == AuthErrorCode.USER_001)
+                .verify();
+
+        verify(sessionService, never()).revokeAllUserSessions(anyString());
+    }
 }

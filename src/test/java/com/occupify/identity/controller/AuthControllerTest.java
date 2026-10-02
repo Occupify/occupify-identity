@@ -189,7 +189,7 @@ class AuthControllerTest {
         when(authService.signOut("valid-refresh-token")).thenReturn(Mono.empty());
 
         webTestClient.post()
-                .uri("/auth/signout")
+                .uri("/auth/sign-out")
                 .header("X-Refresh-Token", "valid-refresh-token")
                 .exchange()
                 .expectStatus().isOk()
@@ -204,7 +204,7 @@ class AuthControllerTest {
         when(authService.forgotPassword(any(ForgotPasswordRequest.class))).thenReturn(Mono.empty());
 
         webTestClient.post()
-                .uri("/auth/forget-password")
+                .uri("/auth/forgot-password")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(request)
                 .exchange()
