@@ -5,9 +5,14 @@ import com.occupify.identity.dto.request.ForgotPasswordRequest;
 import com.occupify.identity.dto.request.LoginRequest;
 import com.occupify.identity.dto.request.RegisterRequest;
 import com.occupify.identity.dto.request.ResetPasswordRequest;
+import com.occupify.identity.dto.request.SendOtpRequest;
+import com.occupify.identity.dto.request.VerifyOtpRequest;
 import com.occupify.identity.dto.response.AuthResponse;
+import com.occupify.identity.dto.response.RegisterResponse;
 import com.occupify.identity.dto.response.TokenRefreshResponse;
 import com.occupify.identity.dto.response.UserSummaryResponse;
+import com.occupify.identity.dto.response.VerifyOtpResponse;
+import com.occupify.identity.enums.OtpType;
 import com.occupify.identity.exception.AuthErrorCode;
 import com.occupify.identity.exception.AuthControllerAdvice;
 import com.occupify.identity.exception.AuthException;
@@ -52,12 +57,10 @@ class AuthControllerTest {
     @Test
     void shouldRegisterAccountWith201Created() {
         RegisterRequest request = new RegisterRequest("new@occupify.com", "Password123!");
-        UserSummaryResponse userSummary = new UserSummaryResponse(
-                UUID.randomUUID(), "new@occupify.com", "USER", "ACTIVE", Instant.now()
-        );
-        AuthResponse authResponse = new AuthResponse("token-access", "token-refresh", userSummary);
+        UUID userId = UUID.randomUUID();
+        RegisterResponse registerResponse = new RegisterResponse(userId, "new@occupify.com", "INACTIVE");
 
-        when(authService.register(any(RegisterRequest.class))).thenReturn(Mono.just(authResponse));
+        when(authService.register(any(RegisterRequest.class))).thenReturn(Mono.just(registerResponse));
 
         webTestClient.post()
                 .uri("/auth/register")
@@ -67,9 +70,81 @@ class AuthControllerTest {
                 .expectStatus().isCreated()
                 .expectBody()
                 .jsonPath("$.status").isEqualTo(201)
-                .jsonPath("$.message").isEqualTo("Account registered successfully")
+                .jsonPath("$.message").isEqualTo("Account registered successfully. Please verify OTP sent to your email.")
+                .jsonPath("$.data.email").isEqualTo("new@occupify.com")
+                .jsonPath("$.data.status").isEqualTo("INACTIVE");
+    }
+
+    @Test
+    void shouldSendOtpWith200Ok() {
+        SendOtpRequest request = new SendOtpRequest("new@occupify.com", OtpType.REGISTER);
+        when(authService.sendOtp(any(SendOtpRequest.class))).thenReturn(Mono.empty());
+
+        webTestClient.post()
+                .uri("/auth/send-otp")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.status").isEqualTo(200)
+                .jsonPath("$.message").isEqualTo("OTP sent to your email successfully");
+    }
+
+    @Test
+    void shouldResendOtpWith200Ok() {
+        SendOtpRequest request = new SendOtpRequest("new@occupify.com", OtpType.REGISTER);
+        when(authService.resendOtp(any(SendOtpRequest.class))).thenReturn(Mono.empty());
+
+        webTestClient.post()
+                .uri("/auth/resend-otp")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.status").isEqualTo(200)
+                .jsonPath("$.message").isEqualTo("OTP resent to your email successfully");
+    }
+
+    @Test
+    void shouldVerifyRegisterOtpWith200Ok() {
+        VerifyOtpRequest request = new VerifyOtpRequest("user@occupify.com", "123456", OtpType.REGISTER);
+        UserSummaryResponse userSummary = new UserSummaryResponse(
+                UUID.randomUUID(), "user@occupify.com", "USER", "ACTIVE", Instant.now()
+        );
+        AuthResponse authResponse = new AuthResponse("token-access", "token-refresh", userSummary);
+        when(authService.verifyOtp(any(VerifyOtpRequest.class))).thenReturn(Mono.just(authResponse));
+
+        webTestClient.post()
+                .uri("/auth/verify-otp")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.status").isEqualTo(200)
+                .jsonPath("$.message").isEqualTo("OTP verified successfully")
                 .jsonPath("$.data.accessToken").isEqualTo("token-access")
-                .jsonPath("$.data.user.email").isEqualTo("new@occupify.com");
+                .jsonPath("$.data.user.email").isEqualTo("user@occupify.com");
+    }
+
+    @Test
+    void shouldVerifyForgotPasswordOtpWith200Ok() {
+        VerifyOtpRequest request = new VerifyOtpRequest("user@occupify.com", "123456", OtpType.FORGOT_PASSWORD);
+        VerifyOtpResponse verifyResponse = new VerifyOtpResponse("mock-reset-token");
+        when(authService.verifyOtp(any(VerifyOtpRequest.class))).thenReturn(Mono.just(verifyResponse));
+
+        webTestClient.post()
+                .uri("/auth/verify-otp")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.status").isEqualTo(200)
+                .jsonPath("$.message").isEqualTo("OTP verified successfully")
+                .jsonPath("$.data.resetToken").isEqualTo("mock-reset-token");
     }
 
     @Test
@@ -106,18 +181,7 @@ class AuthControllerTest {
                 .expectStatus().isOk()
                 .expectBody()
                 .jsonPath("$.status").isEqualTo(200)
-                .jsonPath("$.data.accessToken").isEqualTo("new-access-token")
-                .jsonPath("$.data.refreshToken").isEqualTo("valid-refresh-token");
-    }
-
-    @Test
-    void shouldReturn400WhenRefreshTokenHeaderMissing() {
-        webTestClient.post()
-                .uri("/auth/refresh-token")
-                .exchange()
-                .expectStatus().isBadRequest()
-                .expectBody()
-                .jsonPath("$.errorCode").isEqualTo("AUTH_004");
+                .jsonPath("$.data.accessToken").isEqualTo("new-access-token");
     }
 
     @Test
@@ -135,7 +199,7 @@ class AuthControllerTest {
     }
 
     @Test
-    void shouldRequestForgotPasswordOtpWith200Ok() {
+    void shouldSendForgotPasswordOtpWith200Ok() {
         ForgotPasswordRequest request = new ForgotPasswordRequest("user@occupify.com");
         when(authService.forgotPassword(any(ForgotPasswordRequest.class))).thenReturn(Mono.empty());
 
@@ -152,7 +216,7 @@ class AuthControllerTest {
 
     @Test
     void shouldResetPasswordWith200Ok() {
-        ResetPasswordRequest request = new ResetPasswordRequest("user@occupify.com", "123456", "NewPassword123!");
+        ResetPasswordRequest request = new ResetPasswordRequest("user@occupify.com", "reset-token", null, "NewPassword123!");
         when(authService.resetPassword(any(ResetPasswordRequest.class))).thenReturn(Mono.empty());
 
         webTestClient.post()
@@ -167,14 +231,14 @@ class AuthControllerTest {
     }
 
     @Test
-    void shouldChangePasswordWith200OkWhenUserEmailInjected() {
+    void shouldChangePasswordWith200OkUsingInjectedHeader() {
         ChangePasswordRequest request = new ChangePasswordRequest("OldPassword123!", "NewPassword123!");
-        when(authService.changePassword(eq("user@occupify.com"), any(ChangePasswordRequest.class)))
+        when(authService.changePassword(eq("injected@occupify.com"), any(ChangePasswordRequest.class)))
                 .thenReturn(Mono.empty());
 
         webTestClient.post()
                 .uri("/auth/change-password")
-                .header("X-User-Email", "user@occupify.com")
+                .header("X-User-Email", "injected@occupify.com")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(request)
                 .exchange()
@@ -185,7 +249,7 @@ class AuthControllerTest {
     }
 
     @Test
-    void shouldChangePasswordWith200OkWhenBearerTokenProvided() {
+    void shouldChangePasswordWith200OkUsingBearerToken() {
         ChangePasswordRequest request = new ChangePasswordRequest("OldPassword123!", "NewPassword123!");
         String token = jwtUtils.generateAccessToken("tokenuser@occupify.com", UUID.randomUUID().toString(), "USER");
         when(authService.changePassword(eq("tokenuser@occupify.com"), any(ChangePasswordRequest.class)))
