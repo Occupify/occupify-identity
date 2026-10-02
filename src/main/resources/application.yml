@@ -4,6 +4,8 @@ server:
 spring:
   application:
     name: occupify-identity-gateway
+  config:
+    import: optional:file:.env[.properties]
   
   # --- R2DBC Reactive PostgreSQL Configuration ---
   r2dbc:
@@ -101,6 +103,9 @@ app:
   security:
     whitelisted-paths:
       - /auth/register
+      - /auth/send-otp
+      - /auth/resend-otp
+      - /auth/verify-otp
       - /auth/login
       - /auth/refresh-token
       - /auth/signout

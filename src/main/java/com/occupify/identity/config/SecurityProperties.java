@@ -12,6 +12,9 @@ public class SecurityProperties {
 
     private List<String> whitelistedPaths = new ArrayList<>(List.of(
             "/auth/register",
+            "/auth/send-otp",
+            "/auth/resend-otp",
+            "/auth/verify-otp",
             "/auth/login",
             "/auth/refresh-token",
             "/auth/signout",
