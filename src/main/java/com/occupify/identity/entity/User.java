@@ -56,6 +56,20 @@ public class User implements Persistable<UUID> {
         return createWithRole(email, encodedPassword, UserRole.USER.name());
     }
 
+    public static User createInactive(String email, String encodedPassword) {
+        User user = new User(
+                UUID.randomUUID(),
+                email,
+                encodedPassword,
+                UserRole.USER.name(),
+                UserStatus.INACTIVE.name(),
+                Instant.now(),
+                Instant.now()
+        );
+        user.isNewEntity = true;
+        return user;
+    }
+
     public static User createWithRole(String email, String encodedPassword, String role) {
         User user = new User(
                 UUID.randomUUID(),

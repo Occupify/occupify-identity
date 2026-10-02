@@ -18,6 +18,8 @@ public enum AuthErrorCode {
     AUTH_012("AUTH_012", HttpStatus.NOT_FOUND, "User not found"),
     AUTH_013("AUTH_013", HttpStatus.BAD_REQUEST, "Current password does not match"),
     AUTH_014("AUTH_014", HttpStatus.BAD_REQUEST, "New password cannot be identical to current password"),
+    AUTH_015("AUTH_015", HttpStatus.BAD_REQUEST, "Account is already activated"),
+    AUTH_016("AUTH_016", HttpStatus.BAD_REQUEST, "Invalid or expired reset token"),
     USER_001("USER_001", HttpStatus.NOT_FOUND, "User account not found"),
     USER_007("USER_007", HttpStatus.FORBIDDEN, "User account is inactive or locked"),
     USER_008("USER_008", HttpStatus.FORBIDDEN, "User account has been banned");
