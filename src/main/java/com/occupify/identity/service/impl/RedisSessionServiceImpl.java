@@ -2,7 +2,10 @@ package com.occupify.identity.service.impl;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.occupify.identity.exception.AuthErrorCode;
+import com.occupify.identity.exception.AuthException;
 import com.occupify.identity.service.SessionService;
+import com.occupify.identity.util.EmailUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -105,15 +108,15 @@ public class RedisSessionServiceImpl implements SessionService {
         return redisTemplate.execute(revokeAllSessionsScript, keys)
                 .next()
                 .defaultIfEmpty(0L)
-                .doOnSuccess(count -> log.info("Revoked {} active sessions for user [{}]", count, maskEmail(email)));
+                .doOnSuccess(count -> log.info("Revoked {} active sessions for user [{}]", count, EmailUtil.mask(email)));
     }
 
     private Mono<SessionMetadata> deserializeMetadata(String json) {
         try {
             return Mono.just(objectMapper.readValue(json, SessionMetadata.class));
         } catch (JsonProcessingException e) {
-            log.error("Failed to deserialize session metadata from Redis: {}", e.getMessage());
-            return Mono.empty();
+            log.error("Failed to deserialize session metadata from Redis: {}", e.getMessage(), e);
+            return Mono.error(new AuthException(AuthErrorCode.AUTH_005, "Corrupted session data format"));
         }
     }
 
@@ -123,13 +126,5 @@ public class RedisSessionServiceImpl implements SessionService {
 
     private String buildUserSessionsKey(String email) {
         return KEY_PREFIX_USER_SESSIONS + email.trim().toLowerCase();
-    }
-
-    private String maskEmail(String email) {
-        if (email == null || !email.contains("@")) {
-            return "***";
-        }
-        int atIndex = email.indexOf('@');
-        return email.charAt(0) + "***" + email.substring(atIndex);
     }
 }

@@ -38,63 +38,68 @@ public class SmtpNotificationClient implements NotificationClient {
         this.expirationMinutes = Math.max(1, expirationSeconds / 60);
     }
 
+    public record EmailDispatchPayload(
+            String recipientEmail,
+            String subject,
+            String templatePath,
+            String otpCode,
+            String actionDescription
+    ) {}
+
     @Override
     public Mono<Void> sendRegistrationOtp(String recipientEmail, String otpCode) {
-        return sendHtmlEmail(
+        return sendHtmlEmail(new EmailDispatchPayload(
                 recipientEmail,
                 "Occupify - Mã kích hoạt tài khoản",
                 REGISTRATION_TEMPLATE,
                 otpCode,
                 "registration OTP"
-        );
+        ));
     }
 
     @Override
     public Mono<Void> sendPasswordResetOtp(String recipientEmail, String otpCode) {
-        return sendHtmlEmail(
+        return sendHtmlEmail(new EmailDispatchPayload(
                 recipientEmail,
                 "Occupify - Mã đặt lại mật khẩu",
                 PASSWORD_RESET_TEMPLATE,
                 otpCode,
                 "password reset OTP"
-        );
+        ));
     }
 
-    private Mono<Void> sendHtmlEmail(
-            String recipientEmail,
-            String subject,
-            String templatePath,
-            String otpCode,
-            String actionDescription) {
-        if (recipientEmail == null || recipientEmail.isBlank()) {
+    private Mono<Void> sendHtmlEmail(EmailDispatchPayload payload) {
+        if (payload.recipientEmail() == null || payload.recipientEmail().isBlank()) {
             return Mono.error(new AuthException(AuthErrorCode.AUTH_000));
         }
 
-        return Mono.fromRunnable(() -> {
-            try {
-                MimeMessage message = mailSender.createMimeMessage();
-                MimeMessageHelper helper = new MimeMessageHelper(message, StandardCharsets.UTF_8.name());
-                helper.setFrom(fromEmail);
-                helper.setTo(recipientEmail);
-                helper.setSubject(subject);
+        return Mono.fromRunnable(() -> dispatchMimeMessage(payload))
+                .subscribeOn(Schedulers.boundedElastic())
+                .then();
+    }
 
-                String htmlContent = loadTemplateContent(templatePath, otpCode);
-                helper.setText(htmlContent, true);
+    private void dispatchMimeMessage(EmailDispatchPayload payload) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, StandardCharsets.UTF_8.name());
+            helper.setFrom(fromEmail);
+            helper.setTo(payload.recipientEmail());
+            helper.setSubject(payload.subject());
 
-                mailSender.send(message);
-                log.info("Successfully dispatched {} email to [{}]", actionDescription, EmailUtil.mask(recipientEmail));
-            } catch (MailException ex) {
-                log.error("Failed to dispatch {} email to [{}] via SMTP: {}",
-                        actionDescription, EmailUtil.mask(recipientEmail), ex.getMessage());
-                throw new AuthException(AuthErrorCode.AUTH_011);
-            } catch (Exception ex) {
-                log.error("Unexpected error dispatching {} email to [{}]: {}",
-                        actionDescription, EmailUtil.mask(recipientEmail), ex.getMessage());
-                throw new AuthException(AuthErrorCode.AUTH_011);
-            }
-        })
-        .subscribeOn(Schedulers.boundedElastic())
-        .then();
+            String htmlContent = loadTemplateContent(payload.templatePath(), payload.otpCode());
+            helper.setText(htmlContent, true);
+
+            mailSender.send(message);
+            log.info("Successfully dispatched {} email to [{}]", payload.actionDescription(), EmailUtil.mask(payload.recipientEmail()));
+        } catch (MailException ex) {
+            log.error("Failed to dispatch {} email to [{}] via SMTP: {}",
+                    payload.actionDescription(), EmailUtil.mask(payload.recipientEmail()), ex.getMessage());
+            throw new AuthException(AuthErrorCode.AUTH_011);
+        } catch (Exception ex) {
+            log.error("Unexpected error dispatching {} email to [{}]: {}",
+                    payload.actionDescription(), EmailUtil.mask(payload.recipientEmail()), ex.getMessage());
+            throw new AuthException(AuthErrorCode.AUTH_011);
+        }
     }
 
     private String loadTemplateContent(String templatePath, String otpCode) {

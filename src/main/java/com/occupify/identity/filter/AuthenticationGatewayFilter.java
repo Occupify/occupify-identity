@@ -6,6 +6,7 @@ import com.occupify.identity.enums.UserRole;
 import com.occupify.identity.exception.GatewayErrorResponseWriter;
 import com.occupify.identity.jwt.JwtUtils;
 import com.occupify.identity.jwt.UserClaims;
+import com.occupify.identity.util.EmailUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -105,7 +106,7 @@ public class AuthenticationGatewayFilter implements GlobalFilter, Ordered {
         UserClaims claims = userClaimsOpt.get();
         if (isAdminRouteRestricted(path, claims.role())) {
             log.warn("[Corr-{}] Access denied to admin endpoint [{}] for user [id={}, email={}] with role [{}]",
-                    correlationId, path, claims.userId(), maskEmail(claims.email()), claims.role());
+                    correlationId, path, claims.userId(), EmailUtil.mask(claims.email()), claims.role());
             return responseWriter.writeError(exchange, HttpStatus.FORBIDDEN, MSG_ACCESS_DENIED_ADMIN);
         }
 
@@ -178,16 +179,6 @@ public class AuthenticationGatewayFilter implements GlobalFilter, Ordered {
                 .build();
     }
 
-    private String maskEmail(String email) {
-        if (email == null || !email.contains("@")) {
-            return "***";
-        }
-        int atIndex = email.indexOf('@');
-        String name = email.substring(0, atIndex);
-        String domain = email.substring(atIndex);
-        String maskedName = name.length() <= 2 ? name.charAt(0) + "***" : name.charAt(0) + "***" + name.charAt(name.length() - 1);
-        return maskedName + domain;
-    }
 
     @Override
     public int getOrder() {

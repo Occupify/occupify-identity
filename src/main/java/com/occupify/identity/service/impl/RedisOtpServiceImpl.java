@@ -6,6 +6,7 @@ import com.occupify.identity.enums.OtpType;
 import com.occupify.identity.exception.AuthErrorCode;
 import com.occupify.identity.exception.AuthException;
 import com.occupify.identity.service.OtpService;
+import com.occupify.identity.util.EmailUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -89,7 +90,7 @@ public class RedisOtpServiceImpl implements OtpService {
 
         return redisTemplate.opsForValue()
                 .set(key, normalizedEmail, RESET_TOKEN_TTL)
-                .doOnSuccess(v -> log.info("Generated reset token for user [{}]", maskEmail(normalizedEmail)))
+                .doOnSuccess(v -> log.info("Generated reset token for user [{}]", EmailUtil.mask(normalizedEmail)))
                 .thenReturn(resetToken);
     }
 
@@ -106,7 +107,7 @@ public class RedisOtpServiceImpl implements OtpService {
                 .flatMap(storedEmail -> {
                     if (!normalizedEmail.equalsIgnoreCase(storedEmail)) {
                         log.warn("Reset token email mismatch: expected [{}], found [{}]",
-                                maskEmail(normalizedEmail), maskEmail(storedEmail));
+                                EmailUtil.mask(normalizedEmail), EmailUtil.mask(storedEmail));
                         return Mono.error(new AuthException(AuthErrorCode.AUTH_016));
                     }
                     return Mono.just(storedEmail);
@@ -137,10 +138,10 @@ public class RedisOtpServiceImpl implements OtpService {
         try {
             String json = objectMapper.writeValueAsString(otpData);
             return redisTemplate.opsForValue().set(key, json, expirationDuration)
-                    .doOnSuccess(v -> log.info("Generated {} OTP for user [{}]", type, maskEmail(email)))
+                    .doOnSuccess(v -> log.info("Generated {} OTP for user [{}]", type, EmailUtil.mask(email)))
                     .thenReturn(rawOtp);
         } catch (JsonProcessingException e) {
-            log.error("Failed to serialize OTP data for [{}]: {}", maskEmail(email), e.getMessage());
+            log.error("Failed to serialize OTP data for [{}]: {}", EmailUtil.mask(email), e.getMessage(), e);
             return Mono.error(new AuthException(AuthErrorCode.AUTH_011));
         }
     }
@@ -171,11 +172,15 @@ public class RedisOtpServiceImpl implements OtpService {
         try {
             String json = objectMapper.writeValueAsString(updated);
             return redisTemplate.getExpire(key)
-                    .flatMap(remainingTtl -> redisTemplate.opsForValue().set(key, json, remainingTtl))
+                    .defaultIfEmpty(expirationDuration)
+                    .flatMap(ttl -> {
+                        Duration safeTtl = (ttl != null && !ttl.isNegative() && !ttl.isZero()) ? ttl : expirationDuration;
+                        return redisTemplate.opsForValue().set(key, json, safeTtl);
+                    })
                     .then();
         } catch (JsonProcessingException e) {
-            log.error("Failed to update OTP attempt count in Redis: {}", e.getMessage());
-            return Mono.empty();
+            log.error("Failed to update OTP attempt count in Redis: {}", e.getMessage(), e);
+            return Mono.error(new AuthException(AuthErrorCode.AUTH_011, "Failed to update OTP attempts state"));
         }
     }
 
@@ -185,8 +190,8 @@ public class RedisOtpServiceImpl implements OtpService {
                     try {
                         return Mono.just(objectMapper.readValue(json, OtpData.class));
                     } catch (JsonProcessingException e) {
-                        log.error("Failed to deserialize OTP data from Redis: {}", e.getMessage());
-                        return Mono.empty();
+                        log.error("Failed to deserialize OTP data from Redis for key [{}]: {}", key, e.getMessage(), e);
+                        return Mono.error(new AuthException(AuthErrorCode.AUTH_011, "Corrupted OTP data format"));
                     }
                 });
     }
@@ -204,11 +209,4 @@ public class RedisOtpServiceImpl implements OtpService {
         return prefix + email.trim().toLowerCase();
     }
 
-    private String maskEmail(String email) {
-        if (email == null || !email.contains("@")) {
-            return "***";
-        }
-        int atIndex = email.indexOf('@');
-        return email.charAt(0) + "***" + email.substring(atIndex);
-    }
 }

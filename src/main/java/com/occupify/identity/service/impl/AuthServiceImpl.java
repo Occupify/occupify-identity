@@ -190,7 +190,9 @@ public class AuthServiceImpl implements AuthService {
         }
         String encodedPassword = passwordEncoder.encode(newPassword);
         return userRepository.updatePasswordByEmail(existingUser.getEmail(), encodedPassword)
-                .then(otpService.generateAndStoreOtp(existingUser.getEmail(), OtpType.REGISTER))
+                .filter(rows -> rows > 0)
+                .switchIfEmpty(Mono.error(new AuthException(AuthErrorCode.USER_001, "Failed to update user credentials")))
+                .flatMap(rows -> otpService.generateAndStoreOtp(existingUser.getEmail(), OtpType.REGISTER))
                 .flatMap(rawOtp -> notificationClient.sendRegistrationOtp(existingUser.getEmail(), rawOtp))
                 .thenReturn(new RegisterResponse(existingUser.getId(), existingUser.getEmail(), existingUser.getStatus()));
     }
@@ -207,66 +209,40 @@ public class AuthServiceImpl implements AuthService {
     private Mono<Void> sendRegisterOtp(String email) {
         return userRepository.findByEmail(email)
                 .switchIfEmpty(Mono.error(new AuthException(AuthErrorCode.AUTH_012)))
-                .flatMap(user -> {
-                    if (UserStatus.ACTIVE.name().equalsIgnoreCase(user.getStatus())) {
-                        return Mono.error(new AuthException(AuthErrorCode.AUTH_015));
-                    }
-                    if (UserStatus.BANNED.name().equalsIgnoreCase(user.getStatus())) {
-                        return Mono.error(new AuthException(AuthErrorCode.USER_008));
-                    }
-                    return otpService.generateAndStoreOtp(email, OtpType.REGISTER);
-                })
+                .flatMap(this::validateRegistrationEligibility)
+                .flatMap(user -> otpService.generateAndStoreOtp(email, OtpType.REGISTER))
                 .flatMap(rawOtp -> notificationClient.sendRegistrationOtp(email, rawOtp));
     }
 
     private Mono<Void> sendForgotPasswordOtp(String email) {
         return userRepository.findByEmail(email)
                 .switchIfEmpty(Mono.error(new AuthException(AuthErrorCode.AUTH_012)))
-                .flatMap(user -> {
-                    if (UserStatus.INACTIVE.name().equalsIgnoreCase(user.getStatus())) {
-                        return Mono.error(new AuthException(AuthErrorCode.USER_007));
-                    }
-                    if (UserStatus.BANNED.name().equalsIgnoreCase(user.getStatus())) {
-                        return Mono.error(new AuthException(AuthErrorCode.USER_008));
-                    }
-                    return otpService.generateAndStoreOtp(email, OtpType.FORGOT_PASSWORD);
-                })
+                .flatMap(this::validateUserStatus)
+                .flatMap(user -> otpService.generateAndStoreOtp(email, OtpType.FORGOT_PASSWORD))
                 .flatMap(rawOtp -> notificationClient.sendPasswordResetOtp(email, rawOtp));
     }
 
     private Mono<Object> verifyRegisterOtp(String email, String otpCode) {
         return userRepository.findByEmail(email)
                 .switchIfEmpty(Mono.error(new AuthException(AuthErrorCode.AUTH_012)))
-                .flatMap(user -> {
-                    if (UserStatus.ACTIVE.name().equalsIgnoreCase(user.getStatus())) {
-                        return Mono.error(new AuthException(AuthErrorCode.AUTH_015));
-                    }
-                    if (UserStatus.BANNED.name().equalsIgnoreCase(user.getStatus())) {
-                        return Mono.error(new AuthException(AuthErrorCode.USER_008));
-                    }
-                    return otpService.verifyOtp(email, otpCode, OtpType.REGISTER)
-                            .then(userRepository.updateStatusByEmail(email, UserStatus.ACTIVE.name()))
-                            .then(Mono.defer(() -> {
-                                user.setStatus(UserStatus.ACTIVE.name());
-                                return generateAuthResponse(user).map(auth -> (Object) auth);
-                            }));
-                });
+                .flatMap(this::validateRegistrationEligibility)
+                .flatMap(user -> otpService.verifyOtp(email, otpCode, OtpType.REGISTER)
+                        .then(userRepository.updateStatusByEmail(email, UserStatus.ACTIVE.name()))
+                        .filter(rows -> rows > 0)
+                        .switchIfEmpty(Mono.error(new AuthException(AuthErrorCode.USER_001, "Failed to activate user account")))
+                        .flatMap(rows -> {
+                            user.setStatus(UserStatus.ACTIVE.name());
+                            return generateAuthResponse(user).map(auth -> (Object) auth);
+                        }));
     }
 
     private Mono<Object> verifyForgotPasswordOtp(String email, String otpCode) {
         return userRepository.findByEmail(email)
                 .switchIfEmpty(Mono.error(new AuthException(AuthErrorCode.AUTH_012)))
-                .flatMap(user -> {
-                    if (UserStatus.INACTIVE.name().equalsIgnoreCase(user.getStatus())) {
-                        return Mono.error(new AuthException(AuthErrorCode.USER_007));
-                    }
-                    if (UserStatus.BANNED.name().equalsIgnoreCase(user.getStatus())) {
-                        return Mono.error(new AuthException(AuthErrorCode.USER_008));
-                    }
-                    return otpService.verifyOtp(email, otpCode, OtpType.FORGOT_PASSWORD)
-                            .then(otpService.createPasswordResetToken(email))
-                            .map(resetToken -> (Object) new VerifyOtpResponse(resetToken));
-                });
+                .flatMap(this::validateUserStatus)
+                .flatMap(user -> otpService.verifyOtp(email, otpCode, OtpType.FORGOT_PASSWORD))
+                .then(otpService.createPasswordResetToken(email))
+                .map(resetToken -> (Object) new VerifyOtpResponse(resetToken));
     }
 
     private Mono<Void> resetPasswordWithToken(String email, String resetToken, String newPassword) {
@@ -309,6 +285,16 @@ public class AuthServiceImpl implements AuthService {
         return Mono.just(user);
     }
 
+    private Mono<User> validateRegistrationEligibility(User user) {
+        if (UserStatus.ACTIVE.name().equalsIgnoreCase(user.getStatus())) {
+            return Mono.error(new AuthException(AuthErrorCode.AUTH_015));
+        }
+        if (UserStatus.BANNED.name().equalsIgnoreCase(user.getStatus())) {
+            return Mono.error(new AuthException(AuthErrorCode.USER_008));
+        }
+        return Mono.just(user);
+    }
+
     private Mono<AuthResponse> rotateUserSessionAndRespond(User user) {
         return sessionService.revokeAllUserSessions(user.getEmail())
                 .then(generateAuthResponse(user));
@@ -331,7 +317,9 @@ public class AuthServiceImpl implements AuthService {
     private Mono<Void> updatePasswordAndInvalidateSessions(String email, String newPassword) {
         String encodedPassword = passwordEncoder.encode(newPassword);
         return userRepository.updatePasswordByEmail(email, encodedPassword)
-                .then(sessionService.revokeAllUserSessions(email))
+                .filter(rows -> rows > 0)
+                .switchIfEmpty(Mono.error(new AuthException(AuthErrorCode.USER_001, "Failed to update user password")))
+                .flatMap(rows -> sessionService.revokeAllUserSessions(email))
                 .then();
     }
 
