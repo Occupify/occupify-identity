@@ -104,7 +104,7 @@ public class AuthController {
                 .map(data -> ApiResponse.ok("Token refreshed successfully", data));
     }
 
-    @PostMapping("/signout")
+    @PostMapping("/sign-out")
     @Operation(summary = "Sign out")
     public Mono<ApiResponse<Void>> signOut(
             @Parameter(description = "Refresh token", required = true)
@@ -116,7 +116,7 @@ public class AuthController {
                 .thenReturn(ApiResponse.ok("Signed out successfully"));
     }
 
-    @PostMapping("/forget-password")
+    @PostMapping("/forgot-password")
     @Operation(summary = "Forgot password")
     public Mono<ApiResponse<Void>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
         return authService.forgotPassword(request)
