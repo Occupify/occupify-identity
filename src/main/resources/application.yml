@@ -16,12 +16,15 @@ spring:
       enabled: true
       initial-size: 5
       max-size: 20
-  # Automatically run schema.sql on startup if tables are missing
-  sql:
-    init:
-      mode: always
-      schema-locations: classpath:schema.sql
-      data-locations: classpath:seeddata.sql
+  # --- Flyway Database Migration Configuration ---
+  flyway:
+    enabled: true
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5530}/${POSTGRES_DB:occupify_identity}
+    user: ${POSTGRES_USER:postgres}
+    password: ${POSTGRES_PASSWORD:postgres}
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    out-of-order: true
   # --- Reactive Redis Configuration ---
   data:
     redis:
@@ -73,7 +76,7 @@ spring:
         - id: auth-service
           uri: ${SERVICES_AUTH_URL:http://localhost:8181}
           predicates:
-            - Path=/auth/**
+            - Path=/auth/**, /account/**
 
       globalcors:
         cors-configurations:
@@ -98,32 +101,8 @@ management:
   endpoint:
     health:
       show-details: always
-# Application Specific Security & JWT Properties
+# Application Specific JWT & OTP Properties
 app:
-  security:
-    whitelisted-paths:
-      - /auth/register
-      - /auth/send-otp
-      - /auth/resend-otp
-      - /auth/verify-otp
-      - /auth/login
-      - /auth/refresh-token
-      - /auth/sign-out
-      - /auth/forgot-password
-      - /auth/reset-password
-      - /actuator/**
-      - /v3/api-docs/**
-      - /swagger-ui/**
-      - /swagger-ui.html
-      - /webjars/**
-      - /scalar/**
-      - /scalar
-      - /docs/**
-      - /docs
-    admin-restricted-paths:
-      - /admin/**
-      - /audit-logs/**
-      - /reports/**
   jwt:
     secret: ${JWT_SECRET:secret-jwt-key-for-signing-must-be-long-enough-for-hs512-algorithm-minimum-64-bytes!}
     access-token-expiration: ${JWT_ACCESS_TOKEN_EXPIRATION:3600000}
