@@ -1,7 +1,5 @@
 package com.occupify.identity.controller;
 
-import com.occupify.identity.config.OpenApiConfig;
-import com.occupify.identity.dto.request.ChangePasswordRequest;
 import com.occupify.identity.dto.request.ForgotPasswordRequest;
 import com.occupify.identity.dto.request.LoginRequest;
 import com.occupify.identity.dto.request.RegisterRequest;
@@ -14,15 +12,11 @@ import com.occupify.identity.dto.response.RegisterResponse;
 import com.occupify.identity.dto.response.TokenRefreshResponse;
 import com.occupify.identity.exception.AuthErrorCode;
 import com.occupify.identity.exception.AuthException;
-import com.occupify.identity.filter.AuthenticationGatewayFilter;
-import com.occupify.identity.jwt.JwtUtils;
 import com.occupify.identity.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -37,19 +31,15 @@ import reactor.core.publisher.Mono;
 @Tag(name = "Authentication", description = "Auth & Session APIs")
 public class AuthController {
 
-    private static final String BEARER_PREFIX = "Bearer ";
-
     private final AuthService authService;
-    private final JwtUtils jwtUtils;
 
-    public AuthController(AuthService authService, JwtUtils jwtUtils) {
+    public AuthController(AuthService authService) {
         this.authService = authService;
-        this.jwtUtils = jwtUtils;
     }
 
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Register user")
+    @Operation(summary = "Register")
     public Mono<ApiResponse<RegisterResponse>> register(@Valid @RequestBody RegisterRequest request) {
         return authService.register(request)
                 .map(data -> ApiResponse.created("Account registered successfully. Please verify OTP sent to your email.", data));
@@ -128,30 +118,5 @@ public class AuthController {
     public Mono<ApiResponse<Void>> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
         return authService.resetPassword(request)
                 .thenReturn(ApiResponse.ok("Password reset successfully. Please sign in with your new password."));
-    }
-
-    @PostMapping("/change-password")
-    @Operation(summary = "Change password")
-    @SecurityRequirement(name = OpenApiConfig.SECURITY_SCHEME_NAME)
-    public Mono<ApiResponse<Void>> changePassword(
-            @RequestHeader(value = AuthenticationGatewayFilter.HEADER_USER_EMAIL, required = false) String injectedEmail,
-            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader,
-            @Valid @RequestBody ChangePasswordRequest request) {
-        String userEmail = resolveUserEmail(injectedEmail, authHeader);
-        return authService.changePassword(userEmail, request)
-                .thenReturn(ApiResponse.ok("Password changed successfully"));
-    }
-
-    private String resolveUserEmail(String injectedEmail, String authHeader) {
-        if (injectedEmail != null && !injectedEmail.isBlank()) {
-            return injectedEmail;
-        }
-        if (authHeader != null && authHeader.startsWith(BEARER_PREFIX)) {
-            String token = authHeader.substring(BEARER_PREFIX.length()).trim();
-            if (jwtUtils.validateToken(token)) {
-                return jwtUtils.extractEmail(token);
-            }
-        }
-        throw new AuthException(AuthErrorCode.AUTH_003, "Authentication token or identity context required");
     }
 }

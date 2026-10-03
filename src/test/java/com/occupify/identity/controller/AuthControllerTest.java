@@ -1,6 +1,5 @@
 package com.occupify.identity.controller;
 
-import com.occupify.identity.dto.request.ChangePasswordRequest;
 import com.occupify.identity.dto.request.ForgotPasswordRequest;
 import com.occupify.identity.dto.request.LoginRequest;
 import com.occupify.identity.dto.request.RegisterRequest;
@@ -16,7 +15,6 @@ import com.occupify.identity.enums.OtpType;
 import com.occupify.identity.exception.AuthErrorCode;
 import com.occupify.identity.exception.AuthControllerAdvice;
 import com.occupify.identity.exception.AuthException;
-import com.occupify.identity.jwt.JwtUtils;
 import com.occupify.identity.service.AuthService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,18 +35,14 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class AuthControllerTest {
 
-    private static final String TEST_SECRET = "occupify-super-secret-jwt-signing-key-for-unit-testing-must-be-at-least-64-bytes-long!";
-
     @Mock
     private AuthService authService;
 
-    private JwtUtils jwtUtils;
     private WebTestClient webTestClient;
 
     @BeforeEach
     void setUp() {
-        jwtUtils = new JwtUtils(TEST_SECRET, 3600000, 604800000);
-        AuthController controller = new AuthController(authService, jwtUtils);
+        AuthController controller = new AuthController(authService);
         webTestClient = WebTestClient.bindToController(controller)
                 .controllerAdvice(new AuthControllerAdvice())
                 .build();
@@ -228,58 +222,6 @@ class AuthControllerTest {
                 .expectBody()
                 .jsonPath("$.status").isEqualTo(200)
                 .jsonPath("$.message").isEqualTo("Password reset successfully. Please sign in with your new password.");
-    }
-
-    @Test
-    void shouldChangePasswordWith200OkUsingInjectedHeader() {
-        ChangePasswordRequest request = new ChangePasswordRequest("OldPassword123!", "NewPassword123!");
-        when(authService.changePassword(eq("injected@occupify.com"), any(ChangePasswordRequest.class)))
-                .thenReturn(Mono.empty());
-
-        webTestClient.post()
-                .uri("/auth/change-password")
-                .header("X-User-Email", "injected@occupify.com")
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(request)
-                .exchange()
-                .expectStatus().isOk()
-                .expectBody()
-                .jsonPath("$.status").isEqualTo(200)
-                .jsonPath("$.message").isEqualTo("Password changed successfully");
-    }
-
-    @Test
-    void shouldChangePasswordWith200OkUsingBearerToken() {
-        ChangePasswordRequest request = new ChangePasswordRequest("OldPassword123!", "NewPassword123!");
-        String token = jwtUtils.generateAccessToken("tokenuser@occupify.com", UUID.randomUUID().toString(), "USER");
-        when(authService.changePassword(eq("tokenuser@occupify.com"), any(ChangePasswordRequest.class)))
-                .thenReturn(Mono.empty());
-
-        webTestClient.post()
-                .uri("/auth/change-password")
-                .header(org.springframework.http.HttpHeaders.AUTHORIZATION, "Bearer " + token)
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(request)
-                .exchange()
-                .expectStatus().isOk()
-                .expectBody()
-                .jsonPath("$.status").isEqualTo(200)
-                .jsonPath("$.message").isEqualTo("Password changed successfully");
-    }
-
-    @Test
-    void shouldReturn401WhenChangePasswordHasNoIdentityHeadersOrToken() {
-        ChangePasswordRequest request = new ChangePasswordRequest("OldPassword123!", "NewPassword123!");
-
-        webTestClient.post()
-                .uri("/auth/change-password")
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(request)
-                .exchange()
-                .expectStatus().isUnauthorized()
-                .expectBody()
-                .jsonPath("$.status").isEqualTo(401)
-                .jsonPath("$.errorCode").isEqualTo("AUTH_003");
     }
 
     @Test
