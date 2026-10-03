@@ -25,11 +25,13 @@ import com.occupify.identity.service.SessionService;
 import com.occupify.identity.service.client.NotificationClient;
 import com.occupify.identity.util.EmailUtil;
 import com.occupify.identity.util.PasswordUtil;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
 
+@Slf4j
 @Service
 public class AuthServiceImpl implements AuthService {
 

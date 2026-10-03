@@ -7,8 +7,7 @@ import com.occupify.identity.exception.AuthErrorCode;
 import com.occupify.identity.exception.AuthException;
 import com.occupify.identity.service.OtpService;
 import com.occupify.identity.util.EmailUtil;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.ReactiveRedisOperations;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -19,10 +18,10 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.UUID;
 
+@Slf4j
 @Service
 public class RedisOtpServiceImpl implements OtpService {
 
-    private static final Logger log = LoggerFactory.getLogger(RedisOtpServiceImpl.class);
     private static final String KEY_PREFIX_REGISTER = "otp:register:";
     private static final String KEY_PREFIX_FORGOT_PASSWORD = "otp:forgot_password:";
     private static final String KEY_PREFIX_RESET_TOKEN = "password_reset_token:";

@@ -6,8 +6,7 @@ import com.occupify.identity.exception.AuthErrorCode;
 import com.occupify.identity.exception.AuthException;
 import com.occupify.identity.service.SessionService;
 import com.occupify.identity.util.EmailUtil;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.ReactiveRedisOperations;
 import org.springframework.data.redis.core.script.RedisScript;
@@ -18,10 +17,9 @@ import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @Service
 public class RedisSessionServiceImpl implements SessionService {
-
-    private static final Logger log = LoggerFactory.getLogger(RedisSessionServiceImpl.class);
 
     private static final String KEY_PREFIX_REFRESH_TOKEN = "refresh_token:";
     private static final String KEY_PREFIX_USER_SESSIONS = "user_sessions:";
