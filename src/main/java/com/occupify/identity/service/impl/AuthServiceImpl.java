@@ -25,8 +25,6 @@ import com.occupify.identity.service.SessionService;
 import com.occupify.identity.service.client.NotificationClient;
 import com.occupify.identity.util.EmailUtil;
 import com.occupify.identity.util.PasswordUtil;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,8 +32,6 @@ import reactor.core.publisher.Mono;
 
 @Service
 public class AuthServiceImpl implements AuthService {
-
-    private static final Logger log = LoggerFactory.getLogger(AuthServiceImpl.class);
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -130,8 +126,7 @@ public class AuthServiceImpl implements AuthService {
                     String newAccessToken = jwtUtils.generateAccessToken(
                             user.getEmail(),
                             user.getId().toString(),
-                            user.getRole()
-                    );
+                            user.getRole());
                     return new TokenRefreshResponse(newAccessToken, refreshToken);
                 });
     }
@@ -191,10 +186,12 @@ public class AuthServiceImpl implements AuthService {
         String encodedPassword = passwordEncoder.encode(newPassword);
         return userRepository.updatePasswordByEmail(existingUser.getEmail(), encodedPassword)
                 .filter(rows -> rows > 0)
-                .switchIfEmpty(Mono.error(new AuthException(AuthErrorCode.USER_001, "Failed to update user credentials")))
+                .switchIfEmpty(
+                        Mono.error(new AuthException(AuthErrorCode.USER_001, "Failed to update user credentials")))
                 .flatMap(rows -> otpService.generateAndStoreOtp(existingUser.getEmail(), OtpType.REGISTER))
                 .flatMap(rawOtp -> notificationClient.sendRegistrationOtp(existingUser.getEmail(), rawOtp))
-                .thenReturn(new RegisterResponse(existingUser.getId(), existingUser.getEmail(), existingUser.getStatus()));
+                .thenReturn(
+                        new RegisterResponse(existingUser.getId(), existingUser.getEmail(), existingUser.getStatus()));
     }
 
     private Mono<RegisterResponse> handleNewUserRegistration(String email, String rawPassword) {
@@ -203,7 +200,8 @@ public class AuthServiceImpl implements AuthService {
         return userRepository.save(newUser)
                 .flatMap(savedUser -> otpService.generateAndStoreOtp(email, OtpType.REGISTER)
                         .flatMap(rawOtp -> notificationClient.sendRegistrationOtp(email, rawOtp))
-                        .thenReturn(new RegisterResponse(savedUser.getId(), savedUser.getEmail(), savedUser.getStatus())));
+                        .thenReturn(
+                                new RegisterResponse(savedUser.getId(), savedUser.getEmail(), savedUser.getStatus())));
     }
 
     private Mono<Void> sendRegisterOtp(String email) {
@@ -229,7 +227,8 @@ public class AuthServiceImpl implements AuthService {
                 .flatMap(user -> otpService.verifyOtp(email, otpCode, OtpType.REGISTER)
                         .then(userRepository.updateStatusByEmail(email, UserStatus.ACTIVE.name()))
                         .filter(rows -> rows > 0)
-                        .switchIfEmpty(Mono.error(new AuthException(AuthErrorCode.USER_001, "Failed to activate user account")))
+                        .switchIfEmpty(Mono
+                                .error(new AuthException(AuthErrorCode.USER_001, "Failed to activate user account")))
                         .flatMap(rows -> {
                             user.setStatus(UserStatus.ACTIVE.name());
                             return generateAuthResponse(user).map(auth -> (Object) auth);
@@ -329,8 +328,7 @@ public class AuthServiceImpl implements AuthService {
                 user.getEmail(),
                 user.getRole(),
                 user.getStatus(),
-                user.getCreatedAt()
-        );
+                user.getCreatedAt());
     }
 
     private void validateEmailAndPassword(String email, String password) {
