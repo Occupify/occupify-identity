@@ -5,8 +5,7 @@ import com.occupify.identity.exception.AuthException;
 import com.occupify.identity.service.client.NotificationClient;
 import com.occupify.identity.util.EmailUtil;
 import jakarta.mail.internet.MimeMessage;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.mail.MailException;
@@ -18,10 +17,10 @@ import reactor.core.scheduler.Schedulers;
 
 import java.nio.charset.StandardCharsets;
 
+@Slf4j
 @Component
 public class SmtpNotificationClient implements NotificationClient {
 
-    private static final Logger log = LoggerFactory.getLogger(SmtpNotificationClient.class);
     private static final String REGISTRATION_TEMPLATE = "static/email/registration-otp.html";
     private static final String PASSWORD_RESET_TEMPLATE = "static/email/password-reset.html";
 

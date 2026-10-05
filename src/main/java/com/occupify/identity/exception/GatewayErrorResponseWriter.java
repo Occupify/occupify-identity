@@ -3,8 +3,7 @@ package com.occupify.identity.exception;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.occupify.identity.filter.CorrelationIdFilter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -16,10 +15,10 @@ import reactor.core.publisher.Mono;
 
 import java.nio.charset.StandardCharsets;
 
+@Slf4j
 @Component
 public class GatewayErrorResponseWriter {
 
-    private static final Logger log = LoggerFactory.getLogger(GatewayErrorResponseWriter.class);
 
     public static final String UNKNOWN_CORRELATION_ID = CorrelationIdFilter.UNKNOWN_CORRELATION_ID;
     private static final String DEFAULT_ERROR_PHRASE = "Gateway Error";

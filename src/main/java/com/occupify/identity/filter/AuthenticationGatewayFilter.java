@@ -7,8 +7,7 @@ import com.occupify.identity.exception.GatewayErrorResponseWriter;
 import com.occupify.identity.jwt.JwtUtils;
 import com.occupify.identity.jwt.UserClaims;
 import com.occupify.identity.util.EmailUtil;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
@@ -27,10 +26,10 @@ import org.springframework.util.StringUtils;
 import java.util.List;
 import java.util.Optional;
 
+@Slf4j
 @Component
 public class AuthenticationGatewayFilter implements GlobalFilter, Ordered {
 
-    private static final Logger log = LoggerFactory.getLogger(AuthenticationGatewayFilter.class);
 
     public static final String HEADER_USER_ID = "X-User-Id";
     public static final String HEADER_USER_EMAIL = "X-User-Email";

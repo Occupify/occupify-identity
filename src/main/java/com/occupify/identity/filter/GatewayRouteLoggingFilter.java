@@ -1,7 +1,6 @@
 package com.occupify.identity.filter;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.cloud.gateway.filter.RouteToRequestUrlFilter;
@@ -17,10 +16,10 @@ import reactor.core.publisher.Mono;
 import java.net.InetSocketAddress;
 import java.net.URI;
 
+@Slf4j
 @Component
 public class GatewayRouteLoggingFilter implements GlobalFilter, Ordered {
 
-    private static final Logger log = LoggerFactory.getLogger(GatewayRouteLoggingFilter.class);
 
     public static final String DEFAULT_CORRELATION_ID = "N/A";
     public static final String UNKNOWN_CLIENT_IP = "unknown";

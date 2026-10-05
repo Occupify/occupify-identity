@@ -1,8 +1,7 @@
 package com.occupify.identity.exception;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.web.reactive.error.ErrorWebExceptionHandler;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
@@ -14,6 +13,7 @@ import reactor.core.publisher.Mono;
 
 import java.net.ConnectException;
 
+@Slf4j
 @Component
 @Order(GlobalErrorWebExceptionHandler.ORDER)
 public class GlobalErrorWebExceptionHandler implements ErrorWebExceptionHandler {
@@ -21,7 +21,6 @@ public class GlobalErrorWebExceptionHandler implements ErrorWebExceptionHandler 
     // Higher precedence than default Spring WebFlux ErrorWebExceptionHandler (ORDER = -1)
     public static final int ORDER = -2;
 
-    private static final Logger log = LoggerFactory.getLogger(GlobalErrorWebExceptionHandler.class);
     private static final String DEFAULT_DOWNSTREAM_OFFLINE_MSG = "Downstream microservice is unreachable or offline";
     private static final String DEFAULT_UNEXPECTED_ERROR_MSG = "Unexpected gateway error";
 
