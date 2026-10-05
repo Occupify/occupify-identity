@@ -20,9 +20,9 @@ import com.occupify.identity.exception.AuthException;
 import com.occupify.identity.jwt.JwtUtils;
 import com.occupify.identity.repository.UserRepository;
 import com.occupify.identity.service.AuthService;
+import com.occupify.identity.service.EmailService;
 import com.occupify.identity.service.OtpService;
 import com.occupify.identity.service.SessionService;
-import com.occupify.identity.service.client.NotificationClient;
 import com.occupify.identity.util.EmailUtil;
 import com.occupify.identity.util.PasswordUtil;
 import lombok.extern.slf4j.Slf4j;
@@ -40,7 +40,7 @@ public class AuthServiceImpl implements AuthService {
     private final JwtUtils jwtUtils;
     private final SessionService sessionService;
     private final OtpService otpService;
-    private final NotificationClient notificationClient;
+    private final EmailService emailService;
 
     public AuthServiceImpl(
             UserRepository userRepository,
@@ -48,13 +48,13 @@ public class AuthServiceImpl implements AuthService {
             JwtUtils jwtUtils,
             SessionService sessionService,
             OtpService otpService,
-            NotificationClient notificationClient) {
+            EmailService emailService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtils = jwtUtils;
         this.sessionService = sessionService;
         this.otpService = otpService;
-        this.notificationClient = notificationClient;
+        this.emailService = emailService;
     }
 
     @Override
@@ -191,7 +191,7 @@ public class AuthServiceImpl implements AuthService {
                 .switchIfEmpty(
                         Mono.error(new AuthException(AuthErrorCode.USER_001, "Failed to update user credentials")))
                 .flatMap(rows -> otpService.generateAndStoreOtp(existingUser.getEmail(), OtpType.REGISTER))
-                .flatMap(rawOtp -> notificationClient.sendRegistrationOtp(existingUser.getEmail(), rawOtp))
+                .flatMap(rawOtp -> emailService.sendRegistrationOtp(existingUser.getEmail(), rawOtp))
                 .thenReturn(
                         new RegisterResponse(existingUser.getId(), existingUser.getEmail(), existingUser.getStatus()));
     }
@@ -201,7 +201,7 @@ public class AuthServiceImpl implements AuthService {
         User newUser = User.createInactive(email, encodedPassword);
         return userRepository.save(newUser)
                 .flatMap(savedUser -> otpService.generateAndStoreOtp(email, OtpType.REGISTER)
-                        .flatMap(rawOtp -> notificationClient.sendRegistrationOtp(email, rawOtp))
+                        .flatMap(rawOtp -> emailService.sendRegistrationOtp(email, rawOtp))
                         .thenReturn(
                                 new RegisterResponse(savedUser.getId(), savedUser.getEmail(), savedUser.getStatus())));
     }
@@ -211,7 +211,7 @@ public class AuthServiceImpl implements AuthService {
                 .switchIfEmpty(Mono.error(new AuthException(AuthErrorCode.AUTH_012)))
                 .flatMap(this::validateRegistrationEligibility)
                 .flatMap(user -> otpService.generateAndStoreOtp(email, OtpType.REGISTER))
-                .flatMap(rawOtp -> notificationClient.sendRegistrationOtp(email, rawOtp));
+                .flatMap(rawOtp -> emailService.sendRegistrationOtp(email, rawOtp));
     }
 
     private Mono<Void> sendForgotPasswordOtp(String email) {
@@ -219,7 +219,7 @@ public class AuthServiceImpl implements AuthService {
                 .switchIfEmpty(Mono.error(new AuthException(AuthErrorCode.AUTH_012)))
                 .flatMap(this::validateUserStatus)
                 .flatMap(user -> otpService.generateAndStoreOtp(email, OtpType.FORGOT_PASSWORD))
-                .flatMap(rawOtp -> notificationClient.sendPasswordResetOtp(email, rawOtp));
+                .flatMap(rawOtp -> emailService.sendPasswordResetOtp(email, rawOtp));
     }
 
     private Mono<Object> verifyRegisterOtp(String email, String otpCode) {

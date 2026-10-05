@@ -1,8 +1,8 @@
-package com.occupify.identity.service.client;
+package com.occupify.identity.service;
 
 import reactor.core.publisher.Mono;
 
-public interface NotificationClient {
+public interface EmailService {
 
     Mono<Void> sendRegistrationOtp(String recipientEmail, String otpCode);
 

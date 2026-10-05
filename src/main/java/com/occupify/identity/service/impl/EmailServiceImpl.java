@@ -1,8 +1,8 @@
-package com.occupify.identity.service.client.impl;
+package com.occupify.identity.service.impl;
 
 import com.occupify.identity.exception.AuthErrorCode;
 import com.occupify.identity.exception.AuthException;
-import com.occupify.identity.service.client.NotificationClient;
+import com.occupify.identity.service.EmailService;
 import com.occupify.identity.util.EmailUtil;
 import jakarta.mail.internet.MimeMessage;
 import lombok.extern.slf4j.Slf4j;
@@ -11,15 +11,15 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.mail.MailException;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 import java.nio.charset.StandardCharsets;
 
 @Slf4j
-@Component
-public class SmtpNotificationClient implements NotificationClient {
+@Service
+public class EmailServiceImpl implements EmailService {
 
     private static final String REGISTRATION_TEMPLATE = "static/email/registration-otp.html";
     private static final String PASSWORD_RESET_TEMPLATE = "static/email/password-reset.html";
@@ -28,7 +28,7 @@ public class SmtpNotificationClient implements NotificationClient {
     private final String fromEmail;
     private final long expirationMinutes;
 
-    public SmtpNotificationClient(
+    public EmailServiceImpl(
             JavaMailSender mailSender,
             @Value("${spring.mail.username:no-reply@occupify.com}") String fromEmail,
             @Value("${app.otp.expiration-seconds:300}") long expirationSeconds) {
