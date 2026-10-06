@@ -1,5 +1,7 @@
 package com.occupify.identity.exception;
 
+import com.occupify.identity.dto.base.GatewayErrorResponse;
+import com.occupify.identity.exception.auth.AuthErrorCode;
 import com.occupify.identity.filter.CorrelationIdFilter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -13,22 +15,21 @@ import org.springframework.web.server.ServerWebExchange;
 
 @Slf4j
 @RestControllerAdvice(basePackages = "com.occupify.identity.controller")
-public class AuthControllerAdvice {
+public class GlobalExceptionHandler {
 
-
-    @ExceptionHandler(AuthException.class)
-    public ResponseEntity<GatewayErrorResponse> handleAuthException(AuthException ex, ServerWebExchange exchange) {
+    @ExceptionHandler(BaseException.class)
+    public ResponseEntity<GatewayErrorResponse> handleBaseException(BaseException ex, ServerWebExchange exchange) {
         String path = exchange.getRequest().getURI().getPath();
         String correlationId = CorrelationIdFilter.resolveCorrelationId(exchange);
 
-        log.warn("[Corr-{}] AuthException at [{}]: Code={} Message={}",
-                correlationId, path, ex.getErrorCode().getCode(), ex.getMessage());
+        log.warn("[Corr-{}] {} at [{}]: Code={} Message={}",
+                correlationId, ex.getClass().getSimpleName(), path, ex.getCode(), ex.getMessage());
 
         GatewayErrorResponse response = GatewayErrorResponse.of(
                 ex.getStatus().value(),
                 ex.getStatus().getReasonPhrase(),
                 ex.getMessage(),
-                ex.getErrorCode().getCode(),
+                ex.getCode(),
                 path,
                 correlationId
         );
@@ -68,19 +69,20 @@ public class AuthControllerAdvice {
         String correlationId = CorrelationIdFilter.resolveCorrelationId(exchange);
         String reason = ex.getReason() != null ? ex.getReason() : ex.getMessage();
 
-        log.warn("[Corr-{}] ResponseStatusException at [{}]: Status={} Reason={}",
-                correlationId, path, ex.getStatusCode().value(), reason);
+        log.warn("[Corr-{}] ResponseStatusException at [{}]: status={} reason={}",
+                correlationId, path, ex.getStatusCode(), reason);
+
+        HttpStatus status = (ex.getStatusCode() instanceof HttpStatus hs) ? hs : HttpStatus.INTERNAL_SERVER_ERROR;
 
         GatewayErrorResponse response = GatewayErrorResponse.of(
-                ex.getStatusCode().value(),
-                HttpStatus.resolve(ex.getStatusCode().value()) != null
-                        ? HttpStatus.resolve(ex.getStatusCode().value()).getReasonPhrase()
-                        : "Error",
+                status.value(),
+                status.getReasonPhrase(),
                 reason,
+                null,
                 path,
                 correlationId
         );
-        return ResponseEntity.status(ex.getStatusCode()).body(response);
+        return ResponseEntity.status(status).body(response);
     }
 
     @ExceptionHandler(Exception.class)
@@ -88,12 +90,14 @@ public class AuthControllerAdvice {
         String path = exchange.getRequest().getURI().getPath();
         String correlationId = CorrelationIdFilter.resolveCorrelationId(exchange);
 
-        log.error("[Corr-{}] Unhandled error at [{}]: {}", correlationId, path, ex.getMessage(), ex);
+        log.error("[Corr-{}] Unhandled exception at [{}]: {}",
+                correlationId, path, ex.getMessage(), ex);
 
         GatewayErrorResponse response = GatewayErrorResponse.of(
                 HttpStatus.INTERNAL_SERVER_ERROR.value(),
                 HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase(),
-                "An unexpected server error occurred",
+                "An unexpected internal error occurred",
+                null,
                 path,
                 correlationId
         );
@@ -101,11 +105,12 @@ public class AuthControllerAdvice {
     }
 
     private AuthErrorCode resolveValidationErrorCode(String fieldName) {
-        return switch (fieldName) {
-            case "email" -> AuthErrorCode.AUTH_000;
-            case "password", "newPassword" -> AuthErrorCode.AUTH_002;
-            case "otpCode" -> AuthErrorCode.AUTH_009;
-            default -> AuthErrorCode.AUTH_000;
-        };
+        if ("email".equalsIgnoreCase(fieldName)) {
+            return AuthErrorCode.AUTH_000;
+        }
+        if ("password".equalsIgnoreCase(fieldName)) {
+            return AuthErrorCode.AUTH_002;
+        }
+        return AuthErrorCode.AUTH_000;
     }
 }

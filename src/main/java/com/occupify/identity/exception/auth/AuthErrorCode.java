@@ -1,4 +1,4 @@
-package com.occupify.identity.exception;
+package com.occupify.identity.exception.auth;
 
 import org.springframework.http.HttpStatus;
 
