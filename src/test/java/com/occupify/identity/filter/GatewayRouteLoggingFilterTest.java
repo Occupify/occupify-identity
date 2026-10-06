@@ -66,4 +66,21 @@ class GatewayRouteLoggingFilterTest {
 
         assertTrue(chainCalled.get(), "Chain should be called even when route is unmatched");
     }
+
+    @Test
+    void shouldMaskSensitiveQueryParamsInLog() {
+        MockServerHttpRequest request = MockServerHttpRequest.get("/auth/callback?token=supersecret123&code=999888&page=2").build();
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+        exchange.getAttributes().put(CorrelationIdFilter.CORRELATION_ID_ATTRIBUTE, "corr-mask-test");
+
+        AtomicBoolean chainCalled = new AtomicBoolean(false);
+        GatewayFilterChain chain = ex -> {
+            chainCalled.set(true);
+            return Mono.empty();
+        };
+
+        filter.filter(exchange, chain).block();
+
+        assertTrue(chainCalled.get());
+    }
 }

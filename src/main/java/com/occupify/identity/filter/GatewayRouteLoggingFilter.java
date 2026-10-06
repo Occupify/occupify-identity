@@ -1,7 +1,6 @@
 package com.occupify.identity.filter;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.cloud.gateway.filter.RouteToRequestUrlFilter;
@@ -17,10 +16,10 @@ import reactor.core.publisher.Mono;
 import java.net.InetSocketAddress;
 import java.net.URI;
 
+@Slf4j
 @Component
 public class GatewayRouteLoggingFilter implements GlobalFilter, Ordered {
 
-    private static final Logger log = LoggerFactory.getLogger(GatewayRouteLoggingFilter.class);
 
     public static final String DEFAULT_CORRELATION_ID = "N/A";
     public static final String UNKNOWN_CLIENT_IP = "unknown";
@@ -29,57 +28,91 @@ public class GatewayRouteLoggingFilter implements GlobalFilter, Ordered {
     public static final String UNKNOWN_STATUS = "UNKNOWN";
     public static final String QUERY_SEPARATOR = "?";
 
+    private static final java.util.regex.Pattern SENSITIVE_QUERY_PATTERN =
+            java.util.regex.Pattern.compile("(?i)(token|password|secret|code|otp|access_token|refresh_token|api_key|key)=[^&]*");
+
     private static final String LOG_ROUTING_REQUEST =
             "[Corr-{}] Routing request: {} {} -> Route [{}] Target [{}] | Client IP: {}";
     private static final String LOG_COMPLETED_REQUEST =
             "[Corr-{}] Completed request: {} {} -> Route [{}] with status [{}] (elapsed: {}ms)";
+
+    public record RouteLogContext(
+            String correlationId,
+            String method,
+            String fullPath,
+            String routeId,
+            long startTime
+    ) {
+    }
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         long startTime = System.currentTimeMillis();
         ServerHttpRequest request = exchange.getRequest();
         String method = request.getMethod().name();
-        String path = request.getURI().getRawPath();
-        String query = request.getURI().getRawQuery();
-        String fullPath = (query != null && !query.isBlank()) ? path + QUERY_SEPARATOR + query : path;
+        String fullPath = buildFullPath(request);
+        String correlationId = resolveCorrelationId(exchange);
+        String clientIp = extractClientIp(request);
 
-        String correlationId = exchange.getAttribute(CorrelationIdFilter.CORRELATION_ID_ATTRIBUTE);
-        if (correlationId == null) {
-            correlationId = DEFAULT_CORRELATION_ID;
-        }
-
-        InetSocketAddress remoteAddress = request.getRemoteAddress();
-        String clientIp = (remoteAddress != null && remoteAddress.getAddress() != null)
-                ? remoteAddress.getAddress().getHostAddress()
-                : UNKNOWN_CLIENT_IP;
-
-        // Retrieve matched route and destination target URI
         Route route = exchange.getAttribute(ServerWebExchangeUtils.GATEWAY_ROUTE_ATTR);
         URI targetUri = exchange.getAttribute(ServerWebExchangeUtils.GATEWAY_REQUEST_URL_ATTR);
-
         String routeId = (route != null) ? route.getId() : UNMATCHED_ROUTE;
-        String destination = (targetUri != null) ? targetUri.toString()
-                : (route != null ? route.getUri().toString() : UNRESOLVED_DESTINATION);
+        String destination = resolveDestination(route, targetUri);
 
-        // SLF4J Request & Target Route Logging
-        log.info(LOG_ROUTING_REQUEST,
-                correlationId, method, fullPath, routeId, destination, clientIp);
+        log.info(LOG_ROUTING_REQUEST, correlationId, method, fullPath, routeId, destination, clientIp);
 
-        final String finalCorrelationId = correlationId;
-        return chain.filter(exchange).doFinally(signalType -> {
-            long duration = System.currentTimeMillis() - startTime;
-            HttpStatusCode statusCode = exchange.getResponse().getStatusCode();
-            log.info(LOG_COMPLETED_REQUEST,
-                    finalCorrelationId, method, fullPath, routeId,
-                    statusCode != null ? statusCode : UNKNOWN_STATUS,
-                    duration);
-        });
+        RouteLogContext context = new RouteLogContext(correlationId, method, fullPath, routeId, startTime);
+        return chain.filter(exchange).doFinally(signalType ->
+                logCompletedRequest(exchange, context)
+        );
+    }
+
+    private String buildFullPath(ServerHttpRequest request) {
+        String path = request.getURI().getRawPath();
+        String query = request.getURI().getRawQuery();
+        if (query != null && !query.isBlank()) {
+            return path + QUERY_SEPARATOR + maskSensitiveQueryParams(query);
+        }
+        return path;
+    }
+
+    private String maskSensitiveQueryParams(String query) {
+        if (query == null || query.isBlank()) {
+            return query;
+        }
+        return SENSITIVE_QUERY_PATTERN.matcher(query).replaceAll("$1=***");
+    }
+
+    private String resolveCorrelationId(ServerWebExchange exchange) {
+        String correlationId = CorrelationIdFilter.resolveCorrelationId(exchange);
+        return CorrelationIdFilter.UNKNOWN_CORRELATION_ID.equals(correlationId) ? DEFAULT_CORRELATION_ID : correlationId;
+    }
+
+    private String extractClientIp(ServerHttpRequest request) {
+        InetSocketAddress remoteAddress = request.getRemoteAddress();
+        return (remoteAddress != null && remoteAddress.getAddress() != null)
+                ? remoteAddress.getAddress().getHostAddress()
+                : UNKNOWN_CLIENT_IP;
+    }
+
+    private String resolveDestination(Route route, URI targetUri) {
+        if (targetUri != null) {
+            return targetUri.toString();
+        }
+        return (route != null) ? route.getUri().toString() : UNRESOLVED_DESTINATION;
+    }
+
+    private void logCompletedRequest(ServerWebExchange exchange, RouteLogContext context) {
+        long duration = System.currentTimeMillis() - context.startTime();
+        HttpStatusCode statusCode = exchange.getResponse().getStatusCode();
+        log.info(LOG_COMPLETED_REQUEST,
+                context.correlationId(), context.method(), context.fullPath(), context.routeId(),
+                statusCode != null ? statusCode : UNKNOWN_STATUS,
+                duration);
     }
 
     @Override
     public int getOrder() {
-        // Runs immediately after RouteToRequestUrlFilter so GATEWAY_REQUEST_URL_ATTR is
-        // available
         return RouteToRequestUrlFilter.ROUTE_TO_URL_FILTER_ORDER + 1;
     }
 }

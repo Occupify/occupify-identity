@@ -16,6 +16,6 @@ WORKDIR /app
 COPY --from=builder /app/extracted/dependencies/ ./
 COPY --from=builder /app/extracted/snapshot-dependencies/ ./
 COPY --from=builder /app/extracted/application/ ./
-EXPOSE 8080
+EXPOSE 8181
 
 ENTRYPOINT ["java", "-jar", "application.jar"]

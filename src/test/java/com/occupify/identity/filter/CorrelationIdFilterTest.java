@@ -67,4 +67,28 @@ class CorrelationIdFilterTest {
         assertEquals(existingId, downstreamHeader.get());
         assertEquals(existingId, exchange.getResponse().getHeaders().getFirst(CorrelationIdFilter.CORRELATION_ID_HEADER));
     }
+
+    @Test
+    void shouldResolveCorrelationIdFromAttributeOrHeader() {
+        // Null exchange
+        assertEquals(CorrelationIdFilter.UNKNOWN_CORRELATION_ID, CorrelationIdFilter.resolveCorrelationId(null));
+
+        // Exchange with attribute
+        MockServerHttpRequest req1 = MockServerHttpRequest.get("/").build();
+        MockServerWebExchange ex1 = MockServerWebExchange.from(req1);
+        ex1.getAttributes().put(CorrelationIdFilter.CORRELATION_ID_ATTRIBUTE, "attr-corr-id");
+        assertEquals("attr-corr-id", CorrelationIdFilter.resolveCorrelationId(ex1));
+
+        // Exchange with header only
+        MockServerHttpRequest req2 = MockServerHttpRequest.get("/")
+                .header(CorrelationIdFilter.CORRELATION_ID_HEADER, "header-corr-id")
+                .build();
+        MockServerWebExchange ex2 = MockServerWebExchange.from(req2);
+        assertEquals("header-corr-id", CorrelationIdFilter.resolveCorrelationId(ex2));
+
+        // Exchange with neither
+        MockServerHttpRequest req3 = MockServerHttpRequest.get("/").build();
+        MockServerWebExchange ex3 = MockServerWebExchange.from(req3);
+        assertEquals(CorrelationIdFilter.UNKNOWN_CORRELATION_ID, CorrelationIdFilter.resolveCorrelationId(ex3));
+    }
 }

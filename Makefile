@@ -1,10 +1,10 @@
 .PHONY: help up infra down
 
 infra: 
-	@$(COMPOSE) up -d
+	@if command -v docker >/dev/null 2>&1; then docker compose up -d; else podman compose up -d; fi
 
 up: 
 	@./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
 
 down: 
-	@$(COMPOSE) down
+	@if command -v docker >/dev/null 2>&1; then docker compose down; else podman compose down; fi

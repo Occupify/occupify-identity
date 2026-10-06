@@ -15,6 +15,24 @@ public class CorrelationIdFilter implements WebFilter, Ordered {
 
     public static final String CORRELATION_ID_HEADER = "X-Correlation-Id";
     public static final String CORRELATION_ID_ATTRIBUTE = "correlationId";
+    public static final String UNKNOWN_CORRELATION_ID = "unknown";
+
+    public static String resolveCorrelationId(ServerWebExchange exchange) {
+        if (exchange == null) {
+            return UNKNOWN_CORRELATION_ID;
+        }
+        String correlationId = exchange.getAttribute(CORRELATION_ID_ATTRIBUTE);
+        if (correlationId != null && !correlationId.isBlank()) {
+            return correlationId;
+        }
+        if (exchange.getRequest() != null && exchange.getRequest().getHeaders() != null) {
+            String headerId = exchange.getRequest().getHeaders().getFirst(CORRELATION_ID_HEADER);
+            if (headerId != null && !headerId.isBlank()) {
+                return headerId;
+            }
+        }
+        return UNKNOWN_CORRELATION_ID;
+    }
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
