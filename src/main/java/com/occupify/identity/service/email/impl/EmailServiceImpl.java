@@ -3,7 +3,6 @@ package com.occupify.identity.service.email.impl;
 import com.occupify.identity.exception.auth.AuthErrorCode;
 import com.occupify.identity.exception.auth.AuthException;
 import com.occupify.identity.service.email.EmailService;
-import com.occupify.identity.util.EmailUtil;
 import jakarta.mail.internet.MimeMessage;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -89,14 +88,14 @@ public class EmailServiceImpl implements EmailService {
             helper.setText(htmlContent, true);
 
             mailSender.send(message);
-            log.info("Successfully dispatched {} email to [{}]", payload.actionDescription(), EmailUtil.mask(payload.recipientEmail()));
+            log.info("Successfully dispatched {} email to [{}]", payload.actionDescription(), payload.recipientEmail());
         } catch (MailException ex) {
             log.error("Failed to dispatch {} email to [{}] via SMTP: {}",
-                    payload.actionDescription(), EmailUtil.mask(payload.recipientEmail()), ex.getMessage());
+                    payload.actionDescription(), payload.recipientEmail(), ex.getMessage());
             throw new AuthException(AuthErrorCode.AUTH_011);
         } catch (Exception ex) {
             log.error("Unexpected error dispatching {} email to [{}]: {}",
-                    payload.actionDescription(), EmailUtil.mask(payload.recipientEmail()), ex.getMessage());
+                    payload.actionDescription(), payload.recipientEmail(), ex.getMessage());
             throw new AuthException(AuthErrorCode.AUTH_011);
         }
     }

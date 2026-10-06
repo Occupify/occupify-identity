@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.occupify.identity.config.SecurityProperties;
 import com.occupify.identity.enums.UserRole;
 import com.occupify.identity.exception.gateway.GlobalErrorWebExceptionHandler;
-import com.occupify.identity.util.EmailUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
@@ -101,7 +100,7 @@ public class AuthenticationGatewayFilter implements GlobalFilter, Ordered {
         UserClaims claims = userClaimsOpt.get();
         if (isAdminRouteRestricted(path, claims.role())) {
             log.warn("[Corr-{}] Access denied to admin endpoint [{}] for user [id={}, email={}] with role [{}]",
-                    correlationId, path, claims.userId(), EmailUtil.mask(claims.email()), claims.role());
+                    correlationId, path, claims.userId(), claims.email(), claims.role());
             return errorHandler.writeError(exchange, HttpStatus.FORBIDDEN, MSG_ACCESS_DENIED_ADMIN);
         }
 

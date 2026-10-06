@@ -453,7 +453,7 @@ public class AuthServiceImpl implements AuthService {
         return redisTemplate.execute(revokeAllSessionsScript, keys)
                 .next()
                 .defaultIfEmpty(0L)
-                .doOnSuccess(count -> log.info("Revoked {} active sessions for user [{}]", count, EmailUtil.mask(email)));
+                .doOnSuccess(count -> log.info("Revoked {} active sessions for user [{}]", count, email));
     }
 
     private Mono<SessionMetadata> deserializeSessionMetadata(String json) {
@@ -509,7 +509,7 @@ public class AuthServiceImpl implements AuthService {
 
         return redisTemplate.opsForValue()
                 .set(key, normalizedEmail, RESET_TOKEN_TTL)
-                .doOnSuccess(v -> log.info("Generated reset token for user [{}]", EmailUtil.mask(normalizedEmail)))
+                .doOnSuccess(v -> log.info("Generated reset token for user [{}]", normalizedEmail))
                 .thenReturn(resetToken);
     }
 
@@ -525,7 +525,7 @@ public class AuthServiceImpl implements AuthService {
                 .flatMap(storedEmail -> {
                     if (!normalizedEmail.equalsIgnoreCase(storedEmail)) {
                         log.warn("Reset token email mismatch: expected [{}], found [{}]",
-                                EmailUtil.mask(normalizedEmail), EmailUtil.mask(storedEmail));
+                                normalizedEmail, storedEmail);
                         return Mono.error(new AuthException(AuthErrorCode.AUTH_016));
                     }
                     return Mono.just(storedEmail);
@@ -555,10 +555,10 @@ public class AuthServiceImpl implements AuthService {
         try {
             String json = objectMapper.writeValueAsString(otpData);
             return redisTemplate.opsForValue().set(key, json, otpExpirationDuration)
-                    .doOnSuccess(v -> log.info("Generated {} OTP for user [{}]", type, EmailUtil.mask(email)))
+                    .doOnSuccess(v -> log.info("Generated {} OTP for user [{}]", type, email))
                     .thenReturn(rawOtp);
         } catch (JsonProcessingException e) {
-            log.error("Failed to serialize OTP data for [{}]: {}", EmailUtil.mask(email), e.getMessage(), e);
+            log.error("Failed to serialize OTP data for [{}]: {}", email, e.getMessage(), e);
             return Mono.error(new AuthException(AuthErrorCode.AUTH_011));
         }
     }

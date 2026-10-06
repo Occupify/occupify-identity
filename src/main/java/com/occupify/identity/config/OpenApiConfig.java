@@ -10,21 +10,21 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class OpenApiConfig {
 
-    public static final String SECURITY_SCHEME_NAME = "bearerAuth";
+	public static final String SECURITY_SCHEME_NAME = "bearerAuth";
 
-    @Bean
-    public OpenAPI customOpenAPI() {
-        return new OpenAPI()
-                .info(new Info()
-                        .title("Occupify Identity API")
-                        .version("1.0.0")
-                        .description("Authentication and API Gateway documentation."))
-                .components(new Components()
-                        .addSecuritySchemes(SECURITY_SCHEME_NAME, new SecurityScheme()
-                                .name(SECURITY_SCHEME_NAME)
-                                .type(SecurityScheme.Type.HTTP)
-                                .scheme("bearer")
-                                .bearerFormat("JWT")
-                                .description("JWT Access Token")));
-    }
+	@Bean
+	public OpenAPI customOpenAPI() {
+		return new OpenAPI()
+				.info(new Info()
+						.title("Occupify Identity API")
+						.version("1.0.0")
+						.description("Authentication and API Gateway documentation."))
+				.components(new Components()
+						.addSecuritySchemes(SECURITY_SCHEME_NAME, new SecurityScheme()
+								.name(SECURITY_SCHEME_NAME)
+								.type(SecurityScheme.Type.HTTP)
+								.scheme("bearer")
+								.bearerFormat("JWT")
+								.description("JWT Access Token")));
+	}
 }
