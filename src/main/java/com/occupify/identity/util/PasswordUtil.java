@@ -1,7 +1,7 @@
 package com.occupify.identity.util;
 
-import com.occupify.identity.exception.AuthErrorCode;
-import com.occupify.identity.exception.AuthException;
+import com.occupify.identity.exception.auth.AuthErrorCode;
+import com.occupify.identity.exception.auth.AuthException;
 
 public final class PasswordUtil {
 

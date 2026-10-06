@@ -1,6 +1,6 @@
 package com.occupify.identity.util;
 
-import com.occupify.identity.exception.AuthException;
+import com.occupify.identity.exception.auth.AuthException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;

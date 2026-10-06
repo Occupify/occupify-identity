@@ -1,8 +1,8 @@
-package com.occupify.identity.service.impl;
+package com.occupify.identity.service.email.impl;
 
-import com.occupify.identity.exception.AuthErrorCode;
-import com.occupify.identity.exception.AuthException;
-import com.occupify.identity.service.EmailService;
+import com.occupify.identity.exception.auth.AuthErrorCode;
+import com.occupify.identity.exception.auth.AuthException;
+import com.occupify.identity.service.email.EmailService;
 import com.occupify.identity.util.EmailUtil;
 import jakarta.mail.internet.MimeMessage;
 import lombok.extern.slf4j.Slf4j;

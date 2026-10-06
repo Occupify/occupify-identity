@@ -1,4 +1,4 @@
-package com.occupify.identity.service;
+package com.occupify.identity.service.email;
 
 import reactor.core.publisher.Mono;
 
