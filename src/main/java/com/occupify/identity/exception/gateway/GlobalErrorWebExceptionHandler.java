@@ -47,10 +47,14 @@ public class GlobalErrorWebExceptionHandler implements ErrorWebExceptionHandler 
         ErrorDetails details = resolveErrorDetails(ex);
         logError(exchange, details, ex);
 
-        return writeError(exchange, details.status(), details.message());
+        return writeError(exchange, details.status(), details.message(), details.errorCode());
     }
 
     public Mono<Void> writeError(ServerWebExchange exchange, HttpStatusCode status, String message) {
+        return writeError(exchange, status, message, null);
+    }
+
+    public Mono<Void> writeError(ServerWebExchange exchange, HttpStatusCode status, String message, String errorCode) {
         ServerHttpResponse response = exchange.getResponse();
         if (response.isCommitted()) {
             return Mono.empty();
@@ -69,6 +73,7 @@ public class GlobalErrorWebExceptionHandler implements ErrorWebExceptionHandler 
                 status.value(),
                 reasonPhrase,
                 resolvedMessage,
+                errorCode,
                 context
         );
 
@@ -90,16 +95,16 @@ public class GlobalErrorWebExceptionHandler implements ErrorWebExceptionHandler 
 
     private ErrorDetails resolveErrorDetails(Throwable ex) {
         if (ex instanceof BaseException be) {
-            return new ErrorDetails(be.getStatus(), be.getMessage());
+            return new ErrorDetails(be.getStatus(), be.getMessage(), be.getCode());
         }
         if (ex instanceof ResponseStatusException rse) {
             String reason = rse.getReason() != null ? rse.getReason() : rse.getMessage();
-            return new ErrorDetails(rse.getStatusCode(), reason);
+            return new ErrorDetails(rse.getStatusCode(), reason, null);
         }
         if (ex instanceof ConnectException) {
-            return new ErrorDetails(HttpStatus.SERVICE_UNAVAILABLE, DEFAULT_DOWNSTREAM_OFFLINE_MSG);
+            return new ErrorDetails(HttpStatus.SERVICE_UNAVAILABLE, DEFAULT_DOWNSTREAM_OFFLINE_MSG, null);
         }
-        return new ErrorDetails(HttpStatus.INTERNAL_SERVER_ERROR, DEFAULT_UNEXPECTED_ERROR_MSG);
+        return new ErrorDetails(HttpStatus.INTERNAL_SERVER_ERROR, DEFAULT_UNEXPECTED_ERROR_MSG, null);
     }
 
     private void logError(ServerWebExchange exchange, ErrorDetails details, Throwable ex) {
@@ -116,13 +121,10 @@ public class GlobalErrorWebExceptionHandler implements ErrorWebExceptionHandler 
     }
 
     private byte[] buildFallbackJson(GatewayErrorResponse response) {
-        String json = "{\"timestamp\":\"" + escapeJson(response.timestamp()) + "\","
-                + "\"status\":" + response.status() + ","
-                + "\"error\":\"" + escapeJson(response.error()) + "\","
-                + "\"message\":\"" + escapeJson(response.message()) + "\","
-                + (response.errorCode() != null ? "\"errorCode\":\"" + escapeJson(response.errorCode()) + "\"," : "")
-                + "\"path\":\"" + escapeJson(response.path()) + "\","
-                + "\"correlationId\":\"" + escapeJson(response.correlationId()) + "\"}";
+        String json = "{\"statusCode\":" + response.statusCode() + ","
+                + "\"message\":\"" + escapeJson(response.message()) + "\""
+                + (response.errorCode() != null ? ",\"errorCode\":\"" + escapeJson(response.errorCode()) + "\"" : "")
+                + "}";
         return json.getBytes(StandardCharsets.UTF_8);
     }
 
@@ -153,6 +155,6 @@ public class GlobalErrorWebExceptionHandler implements ErrorWebExceptionHandler 
         return sb.toString();
     }
 
-    private record ErrorDetails(HttpStatusCode status, String message) {
+    private record ErrorDetails(HttpStatusCode status, String message, String errorCode) {
     }
 }

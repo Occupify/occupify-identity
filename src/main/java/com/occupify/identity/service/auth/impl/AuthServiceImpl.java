@@ -127,33 +127,46 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    public Mono<AuthResponse> refreshToken(String refreshToken) {
+    public Mono<AuthResponse> refreshToken(String rawRefreshToken) {
+        String refreshToken = cleanToken(rawRefreshToken);
         if (refreshToken == null || refreshToken.isBlank()) {
             return Mono.error(new AuthException(AuthErrorCode.AUTH_004));
         }
 
-        if (!jwtUtils.validateToken(refreshToken)) {
+        try {
+            jwtUtils.parseClaims(refreshToken);
+        } catch (io.jsonwebtoken.ExpiredJwtException e) {
+            log.warn("Refresh token expired: {}", e.getMessage());
+            return Mono.error(new AuthException(AuthErrorCode.AUTH_006));
+        } catch (Exception e) {
+            log.warn("Invalid refresh token format or signature: {}", e.getMessage());
             return Mono.error(new AuthException(AuthErrorCode.AUTH_005));
         }
 
         return isValidSession(refreshToken)
                 .flatMap(isValid -> {
                     if (!Boolean.TRUE.equals(isValid)) {
+                        log.warn("Session invalid or revoked in Redis for token key: [{}]", buildTokenKey(refreshToken));
                         return Mono.error(new AuthException(AuthErrorCode.AUTH_006));
                     }
                     return resolveUserForTokenRefresh(refreshToken);
                 })
-                .map(user -> {
+                .flatMap(user -> {
                     String newAccessToken = jwtUtils.generateAccessToken(
                             user.getEmail(),
                             user.getId().toString(),
                             user.getRole());
-                    return new AuthResponse(newAccessToken, refreshToken);
+                    String newRefreshToken = jwtUtils.generateRefreshToken(user.getEmail());
+
+                    return revokeSession(refreshToken)
+                            .then(saveSession(newRefreshToken, user.getId(), user.getEmail()))
+                            .thenReturn(new AuthResponse(newAccessToken, newRefreshToken, mapToUserResponse(user)));
                 });
     }
 
     @Override
-    public Mono<Void> signOut(String refreshToken) {
+    public Mono<Void> signOut(String rawRefreshToken) {
+        String refreshToken = cleanToken(rawRefreshToken);
         if (refreshToken == null || refreshToken.isBlank()) {
             return Mono.error(new AuthException(AuthErrorCode.AUTH_004));
         }
@@ -192,17 +205,21 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
-    public Mono<Void> resetPassword(ResetPasswordRequest request) {
-        validateEmailAndPassword(request.email(), request.newPassword());
-        String normalizedEmail = EmailUtil.normalize(request.email());
+    public Mono<Void> resetPassword(String userEmail, ResetPasswordRequest request) {
+        if (userEmail == null || userEmail.isBlank()) {
+            return Mono.error(new AuthException(AuthErrorCode.AUTH_003, "Authentication token or identity context required"));
+        }
 
-        if (request.resetToken() != null && !request.resetToken().isBlank()) {
-            return resetPasswordWithToken(normalizedEmail, request.resetToken(), request.newPassword());
+        if (request.confirmPassword() == null || !request.newPassword().equals(request.confirmPassword())) {
+            return Mono.error(new AuthException(AuthErrorCode.AUTH_017, "Confirm password is different"));
         }
-        if (request.otpCode() != null && !request.otpCode().isBlank()) {
-            return resetPasswordWithOtp(normalizedEmail, request.otpCode(), request.newPassword());
-        }
-        return Mono.error(new AuthException(AuthErrorCode.AUTH_016));
+
+        PasswordUtil.validate(request.newPassword());
+        String normalizedEmail = EmailUtil.normalize(userEmail);
+
+        return userRepository.findByEmail(normalizedEmail)
+                .switchIfEmpty(Mono.error(new AuthException(AuthErrorCode.USER_001)))
+                .flatMap(user -> updatePasswordAndInvalidateSessions(normalizedEmail, request.newPassword()));
     }
 
     @Override
@@ -624,5 +641,19 @@ public class AuthServiceImpl implements AuthService {
     private String buildOtpKey(String email, OtpType type) {
         String prefix = type == OtpType.REGISTER ? KEY_PREFIX_REGISTER : KEY_PREFIX_FORGOT_PASSWORD;
         return prefix + email.trim().toLowerCase();
+    }
+
+    private String cleanToken(String token) {
+        if (token == null) {
+            return null;
+        }
+        String cleaned = token.trim();
+        while ((cleaned.startsWith("\"") && cleaned.endsWith("\"")) || (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
+            cleaned = cleaned.substring(1, cleaned.length() - 1).trim();
+        }
+        if (cleaned.startsWith("Bearer ")) {
+            cleaned = cleaned.substring("Bearer ".length()).trim();
+        }
+        return cleaned.isBlank() ? null : cleaned;
     }
 }

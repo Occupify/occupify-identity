@@ -333,13 +333,23 @@ class AuthServiceImplTest {
 				Instant.now(), Instant.now());
 		String refreshToken = jwtUtils.generateRefreshToken("user@occupify.com");
 
+		String json = "{\"userId\":\"" + userId + "\",\"email\":\"user@occupify.com\",\"createdAt\":1000}";
 		when(redisTemplate.hasKey("refresh_token:" + refreshToken)).thenReturn(Mono.just(true));
 		when(userRepository.findByEmail("user@occupify.com")).thenReturn(Mono.just(user));
+		when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+		when(valueOperations.get("refresh_token:" + refreshToken)).thenReturn(Mono.just(json));
+		when(redisTemplate.opsForSet()).thenReturn(setOperations);
+		when(setOperations.remove(eq("user_sessions:user@occupify.com"), eq("refresh_token:" + refreshToken)))
+				.thenReturn(Mono.just(1L));
+		when(redisTemplate.delete("refresh_token:" + refreshToken)).thenReturn(Mono.just(1L));
+		when(valueOperations.set(anyString(), anyString(), any(Duration.class))).thenReturn(Mono.just(true));
+		when(setOperations.add(anyString(), anyString())).thenReturn(Mono.just(1L));
+		when(redisTemplate.expire(anyString(), any(Duration.class))).thenReturn(Mono.just(true));
 
 		StepVerifier.create(authService.refreshToken(refreshToken))
 				.assertNext(response -> {
 					assertNotNull(response.accessToken());
-					assertEquals(refreshToken, response.refreshToken());
+					assertNotNull(response.refreshToken());
 				})
 				.verifyComplete();
 	}
@@ -350,6 +360,27 @@ class AuthServiceImplTest {
 		when(redisTemplate.hasKey("refresh_token:" + refreshToken)).thenReturn(Mono.just(false));
 
 		StepVerifier.create(authService.refreshToken(refreshToken))
+				.expectErrorMatches(ex -> ex instanceof AuthException ae
+						&& ae.getErrorCode() == AuthErrorCode.AUTH_006)
+				.verify();
+	}
+
+	@Test
+	void shouldThrowAuth005WhenRefreshTokenIsMalformedOrInvalid() {
+		String invalidRefreshToken = "malformed.jwt.token";
+
+		StepVerifier.create(authService.refreshToken(invalidRefreshToken))
+				.expectErrorMatches(ex -> ex instanceof AuthException ae
+						&& ae.getErrorCode() == AuthErrorCode.AUTH_005)
+				.verify();
+	}
+
+	@Test
+	void shouldThrowAuth006WhenRefreshTokenIsExpired() {
+		JwtUtils expiredJwtUtils = new JwtUtilsImpl(TEST_SECRET, 3600000, -1000L);
+		String expiredRefreshToken = expiredJwtUtils.generateRefreshToken("user@occupify.com");
+
+		StepVerifier.create(authService.refreshToken(expiredRefreshToken))
 				.expectErrorMatches(ex -> ex instanceof AuthException ae
 						&& ae.getErrorCode() == AuthErrorCode.AUTH_006)
 				.verify();
@@ -375,48 +406,43 @@ class AuthServiceImplTest {
 	}
 
 	@Test
-	void shouldResetPasswordWithTokenAndRevokeAllSessions() {
-		ResetPasswordRequest request = new ResetPasswordRequest("user@occupify.com", "reset-token", null,
-				"NewPassword789!");
+	void shouldResetPasswordSuccessfullyWhenAuthenticated() {
+		ResetPasswordRequest request = new ResetPasswordRequest("NewPassword789!", "NewPassword789!");
 		User user = new User(UUID.randomUUID(), "user@occupify.com", "old-pass", "USER", "ACTIVE",
 				Instant.now(), Instant.now());
 
-		when(redisTemplate.opsForValue()).thenReturn(valueOperations);
-		when(valueOperations.get("password_reset_token:reset-token")).thenReturn(Mono.just("user@occupify.com"));
 		when(userRepository.findByEmail("user@occupify.com")).thenReturn(Mono.just(user));
 		when(passwordEncoder.encode("NewPassword789!")).thenReturn("new-encoded-pass");
 		when(userRepository.updatePasswordByEmail("user@occupify.com", "new-encoded-pass"))
 				.thenReturn(Mono.just(1));
 		mockRedisRevokeAllSessions();
-		when(redisTemplate.delete("password_reset_token:reset-token")).thenReturn(Mono.just(1L));
 
-		StepVerifier.create(authService.resetPassword(request))
+		StepVerifier.create(authService.resetPassword("user@occupify.com", request))
 				.verifyComplete();
 
 		verify(userRepository).updatePasswordByEmail("user@occupify.com", "new-encoded-pass");
 		verify(redisTemplate).execute(eq(revokeAllSessionsScript), eq(List.of("user_sessions:user@occupify.com")));
-		verify(redisTemplate).delete("password_reset_token:reset-token");
 	}
 
 	@Test
-	void shouldResetPasswordWithOtpSuccessfully() {
-		ResetPasswordRequest request = new ResetPasswordRequest("user@occupify.com", null, "123456",
-				"NewPassword789!");
-		User user = new User(UUID.randomUUID(), "user@occupify.com", "old-pass", "USER", "ACTIVE",
-				Instant.now(), Instant.now());
+	void shouldFailResetPasswordWhenConfirmPasswordIsDifferent() {
+		ResetPasswordRequest request = new ResetPasswordRequest("NewPassword789!", "DifferentPassword123!");
 
-		mockRedisOtpVerification("otp:forgot_password:user@occupify.com", "123456", "$2a$10$hashed");
-		when(userRepository.findByEmail("user@occupify.com")).thenReturn(Mono.just(user));
-		when(passwordEncoder.encode("NewPassword789!")).thenReturn("new-encoded-pass");
-		when(userRepository.updatePasswordByEmail("user@occupify.com", "new-encoded-pass"))
-				.thenReturn(Mono.just(1));
-		mockRedisRevokeAllSessions();
+		StepVerifier.create(authService.resetPassword("user@occupify.com", request))
+				.expectErrorMatches(throwable -> throwable instanceof AuthException authEx
+						&& authEx.getErrorCode() == AuthErrorCode.AUTH_017
+						&& authEx.getMessage().contains("Confirm password is different"))
+				.verify();
+	}
 
-		StepVerifier.create(authService.resetPassword(request))
-				.verifyComplete();
+	@Test
+	void shouldFailResetPasswordWhenUnauthenticated() {
+		ResetPasswordRequest request = new ResetPasswordRequest("NewPassword789!", "NewPassword789!");
 
-		verify(userRepository).updatePasswordByEmail("user@occupify.com", "new-encoded-pass");
-		verify(redisTemplate).execute(eq(revokeAllSessionsScript), eq(List.of("user_sessions:user@occupify.com")));
+		StepVerifier.create(authService.resetPassword("", request))
+				.expectErrorMatches(throwable -> throwable instanceof AuthException authEx
+						&& authEx.getErrorCode() == AuthErrorCode.AUTH_003)
+				.verify();
 	}
 
 	@Test

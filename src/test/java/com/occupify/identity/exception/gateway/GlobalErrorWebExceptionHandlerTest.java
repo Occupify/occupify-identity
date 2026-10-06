@@ -39,10 +39,8 @@ class GlobalErrorWebExceptionHandlerTest {
 
         String body = exchange.getResponse().getBodyAsString().block();
         assertNotNull(body);
-        assertTrue(body.contains("\"status\":401"));
+        assertTrue(body.contains("\"statusCode\":401"));
         assertTrue(body.contains("\"message\":\"Invalid Token\""));
-        assertTrue(body.contains("\"path\":\"/test-endpoint\""));
-        assertTrue(body.contains("\"correlationId\":\"corr-abc-123\""));
     }
 
     @Test
@@ -64,8 +62,7 @@ class GlobalErrorWebExceptionHandlerTest {
 
         String body = exchange.getResponse().getBodyAsString().block();
         assertNotNull(body);
-        assertTrue(body.contains("\"status\":403"));
-        assertTrue(body.contains("\"error\":\"Forbidden\""));
+        assertTrue(body.contains("\"statusCode\":403"));
         assertTrue(body.contains("\"message\":\"Forbidden\""));
     }
 
@@ -85,7 +82,7 @@ class GlobalErrorWebExceptionHandlerTest {
         assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, exchange.getResponse().getStatusCode());
         String body = exchange.getResponse().getBodyAsString().block();
         assertNotNull(body);
-        assertTrue(body.contains("\"status\":500"));
+        assertTrue(body.contains("\"statusCode\":500"));
         assertTrue(body.contains("\"message\":\"Fallback Message\""));
     }
 
@@ -100,7 +97,7 @@ class GlobalErrorWebExceptionHandlerTest {
         assertEquals(HttpStatus.NOT_FOUND, exchange.getResponse().getStatusCode());
         String body = exchange.getResponse().getBodyAsString().block();
         assertNotNull(body);
-        assertTrue(body.contains("\"status\":404"));
+        assertTrue(body.contains("\"statusCode\":404"));
         assertTrue(body.contains("Resource not found"));
     }
 
@@ -115,7 +112,7 @@ class GlobalErrorWebExceptionHandlerTest {
         assertEquals(HttpStatus.SERVICE_UNAVAILABLE, exchange.getResponse().getStatusCode());
         String body = exchange.getResponse().getBodyAsString().block();
         assertNotNull(body);
-        assertTrue(body.contains("\"status\":503"));
+        assertTrue(body.contains("\"statusCode\":503"));
         assertTrue(body.contains("Downstream microservice is unreachable or offline"));
     }
 
@@ -130,8 +127,9 @@ class GlobalErrorWebExceptionHandlerTest {
         assertEquals(HttpStatus.BAD_REQUEST, exchange.getResponse().getStatusCode());
         String body = exchange.getResponse().getBodyAsString().block();
         assertNotNull(body);
-        assertTrue(body.contains("\"status\":400"));
+        assertTrue(body.contains("\"statusCode\":400"));
         assertTrue(body.contains("Custom base exception"));
+        assertTrue(body.contains("\"errorCode\":\"TEST_CODE\""));
     }
 
     @Test
@@ -145,7 +143,7 @@ class GlobalErrorWebExceptionHandlerTest {
         assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, exchange.getResponse().getStatusCode());
         String body = exchange.getResponse().getBodyAsString().block();
         assertNotNull(body);
-        assertTrue(body.contains("\"status\":500"));
+        assertTrue(body.contains("\"statusCode\":500"));
         assertTrue(body.contains("Unexpected gateway error"));
     }
 

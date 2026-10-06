@@ -87,21 +87,21 @@ public class AuthenticationGatewayFilter implements GlobalFilter, Ordered {
         String authHeader = request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
         if (authHeader == null || !authHeader.startsWith(BEARER_PREFIX)) {
             log.warn("[Corr-{}] Missing or malformed Authorization header for path: {}", correlationId, path);
-            return errorHandler.writeError(exchange, HttpStatus.UNAUTHORIZED, MSG_MISSING_AUTH_HEADER);
+            return errorHandler.writeError(exchange, HttpStatus.UNAUTHORIZED, MSG_MISSING_AUTH_HEADER, com.occupify.identity.exception.auth.AuthErrorCode.AUTH_003.getCode());
         }
 
         String token = authHeader.substring(BEARER_PREFIX.length()).trim();
         Optional<UserClaims> userClaimsOpt = jwtUtils.extractUserClaims(token);
         if (userClaimsOpt.isEmpty()) {
             log.warn("[Corr-{}] Invalid or expired JWT token for path: {}", correlationId, path);
-            return errorHandler.writeError(exchange, HttpStatus.UNAUTHORIZED, MSG_INVALID_JWT_TOKEN);
+            return errorHandler.writeError(exchange, HttpStatus.UNAUTHORIZED, MSG_INVALID_JWT_TOKEN, com.occupify.identity.exception.auth.AuthErrorCode.AUTH_005.getCode());
         }
 
         UserClaims claims = userClaimsOpt.get();
         if (isAdminRouteRestricted(path, claims.role())) {
             log.warn("[Corr-{}] Access denied to admin endpoint [{}] for user [id={}, email={}] with role [{}]",
                     correlationId, path, claims.userId(), claims.email(), claims.role());
-            return errorHandler.writeError(exchange, HttpStatus.FORBIDDEN, MSG_ACCESS_DENIED_ADMIN);
+            return errorHandler.writeError(exchange, HttpStatus.FORBIDDEN, MSG_ACCESS_DENIED_ADMIN, com.occupify.identity.exception.auth.AuthErrorCode.USER_007.getCode());
         }
 
         ServerHttpRequest mutatedRequest = mutateRequestWithClaims(request, claims);

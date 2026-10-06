@@ -1,20 +1,15 @@
 package com.occupify.identity.dto.base;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-
-import java.time.Instant;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@JsonPropertyOrder({ "statusCode", "message", "data" })
 public record ApiResponse<T>(
-        String timestamp,
-        int status,
+        int statusCode,
         String message,
         T data
 ) {
-    public ApiResponse(int status, String message, T data) {
-        this(Instant.now().toString(), status, message, data);
-    }
-
     public static <T> ApiResponse<T> ok(String message, T data) {
         return new ApiResponse<>(200, message, data);
     }

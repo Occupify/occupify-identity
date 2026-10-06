@@ -14,6 +14,7 @@ import com.occupify.identity.enums.OtpType;
 import com.occupify.identity.exception.GlobalExceptionHandler;
 import com.occupify.identity.exception.auth.AuthErrorCode;
 import com.occupify.identity.exception.auth.AuthException;
+import com.occupify.identity.security.AuthenticationGatewayFilter;
 import com.occupify.identity.security.JwtUtils;
 import com.occupify.identity.security.impl.JwtUtilsImpl;
 import com.occupify.identity.service.auth.AuthService;
@@ -69,7 +70,7 @@ class AuthControllerTest {
                                 .exchange()
                                 .expectStatus().isCreated()
                                 .expectBody()
-                                .jsonPath("$.status").isEqualTo(201)
+                                .jsonPath("$.statusCode").isEqualTo(201)
                                 .jsonPath("$.data.email").isEqualTo("new@occupify.com")
                                 .jsonPath("$.data.status").isEqualTo("INACTIVE");
         }
@@ -86,7 +87,7 @@ class AuthControllerTest {
                                 .exchange()
                                 .expectStatus().isOk()
                                 .expectBody()
-                                .jsonPath("$.status").isEqualTo(200)
+                                .jsonPath("$.statusCode").isEqualTo(200)
                                 .jsonPath("$.message").isEqualTo("OTP resent to your email successfully");
         }
 
@@ -104,7 +105,7 @@ class AuthControllerTest {
                                 .exchange()
                                 .expectStatus().isOk()
                                 .expectBody()
-                                .jsonPath("$.status").isEqualTo(200)
+                                .jsonPath("$.statusCode").isEqualTo(200)
                                 .jsonPath("$.data.resetToken").isEqualTo("reset-token-abc");
         }
 
@@ -124,7 +125,7 @@ class AuthControllerTest {
                                 .exchange()
                                 .expectStatus().isOk()
                                 .expectBody()
-                                .jsonPath("$.status").isEqualTo(200)
+                                .jsonPath("$.statusCode").isEqualTo(200)
                                 .jsonPath("$.data.accessToken").isEqualTo("access-token-123")
                                 .jsonPath("$.data.user.email").isEqualTo("user@occupify.com");
         }
@@ -145,7 +146,7 @@ class AuthControllerTest {
                                 .exchange()
                                 .expectStatus().isOk()
                                 .expectBody()
-                                .jsonPath("$.status").isEqualTo(200)
+                                .jsonPath("$.statusCode").isEqualTo(200)
                                 .jsonPath("$.data.accessToken").isEqualTo("access-token-123")
                                 .jsonPath("$.data.user.role").isEqualTo("USER");
         }
@@ -161,7 +162,39 @@ class AuthControllerTest {
                                 .exchange()
                                 .expectStatus().isOk()
                                 .expectBody()
-                                .jsonPath("$.status").isEqualTo(200)
+                                .jsonPath("$.statusCode").isEqualTo(200)
+                                .jsonPath("$.data.accessToken").isEqualTo("new-access-token");
+        }
+
+        @Test
+        void shouldRefreshTokenWith200OkViaRequestBody() {
+                com.occupify.identity.dto.request.auth.RefreshTokenRequest request = new com.occupify.identity.dto.request.auth.RefreshTokenRequest("valid-refresh-token");
+                AuthResponse refreshResponse = new AuthResponse("new-access-token", "new-refresh-token");
+                when(authService.refreshToken("valid-refresh-token")).thenReturn(Mono.just(refreshResponse));
+
+                webTestClient.post()
+                                .uri("/auth/refresh-token")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .bodyValue(request)
+                                .exchange()
+                                .expectStatus().isOk()
+                                .expectBody()
+                                .jsonPath("$.statusCode").isEqualTo(200)
+                                .jsonPath("$.data.accessToken").isEqualTo("new-access-token");
+        }
+
+        @Test
+        void shouldRefreshTokenWith200OkViaAuthorizationHeader() {
+                AuthResponse refreshResponse = new AuthResponse("new-access-token", "new-refresh-token");
+                when(authService.refreshToken("valid-refresh-token")).thenReturn(Mono.just(refreshResponse));
+
+                webTestClient.post()
+                                .uri("/auth/refresh-token")
+                                .header(HttpHeaders.AUTHORIZATION, "Bearer valid-refresh-token")
+                                .exchange()
+                                .expectStatus().isOk()
+                                .expectBody()
+                                .jsonPath("$.statusCode").isEqualTo(200)
                                 .jsonPath("$.data.accessToken").isEqualTo("new-access-token");
         }
 
@@ -172,7 +205,7 @@ class AuthControllerTest {
                                 .exchange()
                                 .expectStatus().isBadRequest()
                                 .expectBody()
-                                .jsonPath("$.status").isEqualTo(400)
+                                .jsonPath("$.statusCode").isEqualTo(400)
                                 .jsonPath("$.errorCode").isEqualTo("AUTH_004");
         }
 
@@ -186,7 +219,7 @@ class AuthControllerTest {
                                 .exchange()
                                 .expectStatus().isOk()
                                 .expectBody()
-                                .jsonPath("$.status").isEqualTo(200)
+                                .jsonPath("$.statusCode").isEqualTo(200)
                                 .jsonPath("$.message").isEqualTo("Signed out successfully");
         }
 
@@ -197,7 +230,7 @@ class AuthControllerTest {
                                 .exchange()
                                 .expectStatus().isBadRequest()
                                 .expectBody()
-                                .jsonPath("$.status").isEqualTo(400)
+                                .jsonPath("$.statusCode").isEqualTo(400)
                                 .jsonPath("$.errorCode").isEqualTo("AUTH_004");
         }
 
@@ -213,24 +246,24 @@ class AuthControllerTest {
                                 .exchange()
                                 .expectStatus().isOk()
                                 .expectBody()
-                                .jsonPath("$.status").isEqualTo(200)
+                                .jsonPath("$.statusCode").isEqualTo(200)
                                 .jsonPath("$.message").isEqualTo("Password reset OTP sent to your email");
         }
 
         @Test
         void shouldResetPasswordWith200Ok() {
-                ResetPasswordRequest request = new ResetPasswordRequest("user@occupify.com", "reset-token-123",
-                                "NewPassword123!");
-                when(authService.resetPassword(any(ResetPasswordRequest.class))).thenReturn(Mono.empty());
+                ResetPasswordRequest request = new ResetPasswordRequest("NewPassword123!", "NewPassword123!");
+                when(authService.resetPassword(eq("user@occupify.com"), any(ResetPasswordRequest.class))).thenReturn(Mono.empty());
 
                 webTestClient.post()
                                 .uri("/auth/reset-password")
+                                .header(AuthenticationGatewayFilter.HEADER_USER_EMAIL, "user@occupify.com")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .bodyValue(request)
                                 .exchange()
                                 .expectStatus().isOk()
                                 .expectBody()
-                                .jsonPath("$.status").isEqualTo(200)
+                                .jsonPath("$.statusCode").isEqualTo(200)
                                 .jsonPath("$.message")
                                 .isEqualTo("Password reset successfully. Please sign in with your new password.");
         }
@@ -246,7 +279,7 @@ class AuthControllerTest {
                                 .exchange()
                                 .expectStatus().isBadRequest()
                                 .expectBody()
-                                .jsonPath("$.status").isEqualTo(400)
+                                .jsonPath("$.statusCode").isEqualTo(400)
                                 .jsonPath("$.errorCode").isEqualTo("AUTH_000");
         }
 
@@ -261,7 +294,7 @@ class AuthControllerTest {
                                 .exchange()
                                 .expectStatus().isBadRequest()
                                 .expectBody()
-                                .jsonPath("$.status").isEqualTo(400)
+                                .jsonPath("$.statusCode").isEqualTo(400)
                                 .jsonPath("$.errorCode").isEqualTo("AUTH_002");
         }
 
@@ -276,7 +309,7 @@ class AuthControllerTest {
                                 .exchange()
                                 .expectStatus().isBadRequest()
                                 .expectBody()
-                                .jsonPath("$.status").isEqualTo(400)
+                                .jsonPath("$.statusCode").isEqualTo(400)
                                 .jsonPath("$.errorCode").isEqualTo("AUTH_000");
         }
 
@@ -293,7 +326,7 @@ class AuthControllerTest {
                                 .exchange()
                                 .expectStatus().isUnauthorized()
                                 .expectBody()
-                                .jsonPath("$.status").isEqualTo(401)
+                                .jsonPath("$.statusCode").isEqualTo(401)
                                 .jsonPath("$.errorCode").isEqualTo("AUTH_003")
                                 .jsonPath("$.message").isEqualTo("Invalid email or password");
         }
@@ -312,7 +345,7 @@ class AuthControllerTest {
                                 .exchange()
                                 .expectStatus().isOk()
                                 .expectBody()
-                                .jsonPath("$.status").isEqualTo(200)
+                                .jsonPath("$.statusCode").isEqualTo(200)
                                 .jsonPath("$.message").isEqualTo("Password changed successfully");
         }
 
@@ -332,7 +365,7 @@ class AuthControllerTest {
                                 .exchange()
                                 .expectStatus().isOk()
                                 .expectBody()
-                                .jsonPath("$.status").isEqualTo(200)
+                                .jsonPath("$.statusCode").isEqualTo(200)
                                 .jsonPath("$.message").isEqualTo("Password changed successfully");
         }
 
@@ -347,7 +380,7 @@ class AuthControllerTest {
                                 .exchange()
                                 .expectStatus().isUnauthorized()
                                 .expectBody()
-                                .jsonPath("$.status").isEqualTo(401)
+                                .jsonPath("$.statusCode").isEqualTo(401)
                                 .jsonPath("$.errorCode").isEqualTo("AUTH_003");
         }
 }
