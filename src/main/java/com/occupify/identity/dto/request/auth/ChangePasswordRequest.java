@@ -1,4 +1,4 @@
-package com.occupify.identity.dto.request;
+package com.occupify.identity.dto.request.auth;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;

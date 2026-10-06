@@ -1,4 +1,4 @@
-package com.occupify.identity.dto.response;
+package com.occupify.identity.dto.response.auth;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 

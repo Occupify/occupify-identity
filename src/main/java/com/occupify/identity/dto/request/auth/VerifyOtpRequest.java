@@ -1,4 +1,4 @@
-package com.occupify.identity.dto.request;
+package com.occupify.identity.dto.request.auth;
 
 import com.occupify.identity.enums.OtpType;
 import io.swagger.v3.oas.annotations.media.Schema;
