@@ -1,4 +1,4 @@
-package com.occupify.identity.jwt;
+package com.occupify.identity.security;
 
 public record UserClaims(
         String userId,

@@ -1,7 +1,8 @@
-package com.occupify.identity.filter;
+package com.occupify.identity.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.occupify.identity.jwt.JwtUtils;
+import com.occupify.identity.filter.CorrelationIdFilter;
+import com.occupify.identity.security.impl.JwtUtilsImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
@@ -28,7 +29,7 @@ class AuthenticationGatewayFilterTest {
 
     @BeforeEach
     void setUp() {
-        jwtUtils = new JwtUtils(TEST_SECRET, 60000, 120000);
+        jwtUtils = new JwtUtilsImpl(TEST_SECRET, 60000, 120000);
         objectMapper = new ObjectMapper();
         filter = new AuthenticationGatewayFilter(jwtUtils, objectMapper);
     }

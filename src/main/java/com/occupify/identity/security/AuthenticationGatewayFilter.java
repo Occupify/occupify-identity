@@ -1,11 +1,9 @@
-package com.occupify.identity.filter;
+package com.occupify.identity.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.occupify.identity.config.SecurityProperties;
 import com.occupify.identity.enums.UserRole;
-import com.occupify.identity.exception.GatewayErrorResponseWriter;
-import com.occupify.identity.jwt.JwtUtils;
-import com.occupify.identity.jwt.UserClaims;
+import com.occupify.identity.exception.gateway.GlobalErrorWebExceptionHandler;
 import com.occupify.identity.util.EmailUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,11 +15,10 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.stereotype.Component;
-import org.springframework.web.server.ServerWebExchange;
-import reactor.core.publisher.Mono;
-
 import org.springframework.util.AntPathMatcher;
 import org.springframework.util.StringUtils;
+import org.springframework.web.server.ServerWebExchange;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Optional;
@@ -29,7 +26,6 @@ import java.util.Optional;
 @Slf4j
 @Component
 public class AuthenticationGatewayFilter implements GlobalFilter, Ordered {
-
 
     public static final String HEADER_USER_ID = "X-User-Id";
     public static final String HEADER_USER_EMAIL = "X-User-Email";
@@ -43,25 +39,25 @@ public class AuthenticationGatewayFilter implements GlobalFilter, Ordered {
     private static final String MSG_ACCESS_DENIED_ADMIN = "Access denied: ADMIN role required";
 
     private final JwtUtils jwtUtils;
-    private final GatewayErrorResponseWriter responseWriter;
+    private final GlobalErrorWebExceptionHandler errorHandler;
     private final SecurityProperties securityProperties;
 
     @Autowired
     public AuthenticationGatewayFilter(
             JwtUtils jwtUtils,
-            GatewayErrorResponseWriter responseWriter,
+            GlobalErrorWebExceptionHandler errorHandler,
             SecurityProperties securityProperties) {
         this.jwtUtils = jwtUtils;
-        this.responseWriter = responseWriter;
+        this.errorHandler = errorHandler;
         this.securityProperties = securityProperties;
     }
 
-    public AuthenticationGatewayFilter(JwtUtils jwtUtils, GatewayErrorResponseWriter responseWriter) {
-        this(jwtUtils, responseWriter, new SecurityProperties());
+    public AuthenticationGatewayFilter(JwtUtils jwtUtils, GlobalErrorWebExceptionHandler errorHandler) {
+        this(jwtUtils, errorHandler, new SecurityProperties());
     }
 
     public AuthenticationGatewayFilter(JwtUtils jwtUtils, ObjectMapper objectMapper) {
-        this(jwtUtils, new GatewayErrorResponseWriter(objectMapper), new SecurityProperties());
+        this(jwtUtils, new GlobalErrorWebExceptionHandler(objectMapper), new SecurityProperties());
     }
 
     private final AntPathMatcher pathMatcher = new AntPathMatcher();
@@ -87,26 +83,26 @@ public class AuthenticationGatewayFilter implements GlobalFilter, Ordered {
 
     private Mono<Void> authenticateAndAuthorize(ServerWebExchange exchange, GatewayFilterChain chain, String path) {
         ServerHttpRequest request = exchange.getRequest();
-        String correlationId = responseWriter.resolveCorrelationId(exchange);
+        String correlationId = errorHandler.resolveCorrelationId(exchange);
 
         String authHeader = request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
         if (authHeader == null || !authHeader.startsWith(BEARER_PREFIX)) {
             log.warn("[Corr-{}] Missing or malformed Authorization header for path: {}", correlationId, path);
-            return responseWriter.writeError(exchange, HttpStatus.UNAUTHORIZED, MSG_MISSING_AUTH_HEADER);
+            return errorHandler.writeError(exchange, HttpStatus.UNAUTHORIZED, MSG_MISSING_AUTH_HEADER);
         }
 
         String token = authHeader.substring(BEARER_PREFIX.length()).trim();
         Optional<UserClaims> userClaimsOpt = jwtUtils.extractUserClaims(token);
         if (userClaimsOpt.isEmpty()) {
             log.warn("[Corr-{}] Invalid or expired JWT token for path: {}", correlationId, path);
-            return responseWriter.writeError(exchange, HttpStatus.UNAUTHORIZED, MSG_INVALID_JWT_TOKEN);
+            return errorHandler.writeError(exchange, HttpStatus.UNAUTHORIZED, MSG_INVALID_JWT_TOKEN);
         }
 
         UserClaims claims = userClaimsOpt.get();
         if (isAdminRouteRestricted(path, claims.role())) {
             log.warn("[Corr-{}] Access denied to admin endpoint [{}] for user [id={}, email={}] with role [{}]",
                     correlationId, path, claims.userId(), EmailUtil.mask(claims.email()), claims.role());
-            return responseWriter.writeError(exchange, HttpStatus.FORBIDDEN, MSG_ACCESS_DENIED_ADMIN);
+            return errorHandler.writeError(exchange, HttpStatus.FORBIDDEN, MSG_ACCESS_DENIED_ADMIN);
         }
 
         ServerHttpRequest mutatedRequest = mutateRequestWithClaims(request, claims);
@@ -177,7 +173,6 @@ public class AuthenticationGatewayFilter implements GlobalFilter, Ordered {
                 })
                 .build();
     }
-
 
     @Override
     public int getOrder() {

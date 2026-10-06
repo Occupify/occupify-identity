@@ -1,5 +1,7 @@
-package com.occupify.identity.jwt;
+package com.occupify.identity.security.impl;
 
+import com.occupify.identity.security.JwtUtils;
+import com.occupify.identity.security.UserClaims;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
@@ -13,21 +15,17 @@ import org.springframework.stereotype.Component;
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
+import java.util.Optional;
 
 @Slf4j
 @Component
-public class JwtUtils {
-
-
-    public static final String CLAIM_USER_ID = "userId";
-    public static final String CLAIM_ROLE = "role";
-    public static final int HS512_MIN_KEY_BYTES = 64;
+public class JwtUtilsImpl implements JwtUtils {
 
     private final SecretKey signingKey;
     private final long accessTokenExpirationMs;
     private final long refreshTokenExpirationMs;
 
-    public JwtUtils(
+    public JwtUtilsImpl(
             @Value("${app.jwt.secret}") String secret,
             @Value("${app.jwt.access-token-expiration:3600000}") long accessTokenExpirationMs,
             @Value("${app.jwt.refresh-token-expiration:604800000}") long refreshTokenExpirationMs) {
@@ -39,9 +37,7 @@ public class JwtUtils {
         this.refreshTokenExpirationMs = refreshTokenExpirationMs;
     }
 
-    /**
-     * Generates an Access Token with claims: userId, role, sub (email).
-     */
+    @Override
     public String generateAccessToken(String email, String userId, String role) {
         validateNonBlank(email, "Subject email");
         validateNonBlank(userId, "User ID");
@@ -60,9 +56,7 @@ public class JwtUtils {
                 .compact();
     }
 
-    /**
-     * Generates a Refresh Token with subject (email) and extended expiration.
-     */
+    @Override
     public String generateRefreshToken(String email) {
         validateNonBlank(email, "Subject email");
 
@@ -77,9 +71,7 @@ public class JwtUtils {
                 .compact();
     }
 
-    /**
-     * Parses and validates cryptographic signature, returning token Claims payload.
-     */
+    @Override
     public Claims parseClaims(String token) {
         validateNonBlank(token, "JWT token");
         return Jwts.parser()
@@ -89,15 +81,13 @@ public class JwtUtils {
                 .getPayload();
     }
 
-    /**
-     * Parses token claims safely, returning Optional.empty() if invalid or expired.
-     */
-    public java.util.Optional<Claims> parseClaimsIfValid(String token) {
+    @Override
+    public Optional<Claims> parseClaimsIfValid(String token) {
         if (token == null || token.isBlank()) {
-            return java.util.Optional.empty();
+            return Optional.empty();
         }
         try {
-            return java.util.Optional.of(parseClaims(token));
+            return Optional.of(parseClaims(token));
         } catch (SecurityException e) {
             log.warn("Invalid JWT signature: {}", e.getMessage());
         } catch (ExpiredJwtException e) {
@@ -107,13 +97,11 @@ public class JwtUtils {
         } catch (IllegalArgumentException e) {
             log.warn("JWT claims string is empty: {}", e.getMessage());
         }
-        return java.util.Optional.empty();
+        return Optional.empty();
     }
 
-    /**
-     * Single-pass extraction of UserClaims (userId, email, role) to avoid repeated parsing.
-     */
-    public java.util.Optional<UserClaims> extractUserClaims(String token) {
+    @Override
+    public Optional<UserClaims> extractUserClaims(String token) {
         return parseClaimsIfValid(token).map(claims -> new UserClaims(
                 claims.get(CLAIM_USER_ID, String.class),
                 claims.getSubject(),
@@ -121,23 +109,34 @@ public class JwtUtils {
         ));
     }
 
-    /**
-     * Validates token signature and expiration without throwing exceptions.
-     */
+    @Override
     public boolean validateToken(String token) {
         return parseClaimsIfValid(token).isPresent();
     }
 
+    @Override
     public String extractEmail(String token) {
         return parseClaims(token).getSubject();
     }
 
+    @Override
     public String extractUserId(String token) {
         return parseClaims(token).get(CLAIM_USER_ID, String.class);
     }
 
+    @Override
     public String extractRole(String token) {
         return parseClaims(token).get(CLAIM_ROLE, String.class);
+    }
+
+    @Override
+    public long getAccessTokenExpiration() {
+        return accessTokenExpirationMs;
+    }
+
+    @Override
+    public long getRefreshTokenExpiration() {
+        return refreshTokenExpirationMs;
     }
 
     private void validateNonBlank(String value, String fieldName) {

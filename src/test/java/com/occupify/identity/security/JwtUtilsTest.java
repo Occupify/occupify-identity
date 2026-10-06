@@ -1,5 +1,6 @@
-package com.occupify.identity.jwt;
+package com.occupify.identity.security;
 
+import com.occupify.identity.security.impl.JwtUtilsImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -18,7 +19,7 @@ class JwtUtilsTest {
 
     @BeforeEach
     void setUp() {
-        jwtUtils = new JwtUtils(TEST_SECRET, ACCESS_EXPIRATION_MS, REFRESH_EXPIRATION_MS);
+        jwtUtils = new JwtUtilsImpl(TEST_SECRET, ACCESS_EXPIRATION_MS, REFRESH_EXPIRATION_MS);
     }
 
     @Test
@@ -50,7 +51,7 @@ class JwtUtilsTest {
     @Test
     void shouldRejectExpiredToken() throws InterruptedException {
         // Create JwtUtils with 1ms expiration
-        JwtUtils expiredJwtUtils = new JwtUtils(TEST_SECRET, 1, 1);
+        JwtUtils expiredJwtUtils = new JwtUtilsImpl(TEST_SECRET, 1, 1);
         String token = expiredJwtUtils.generateAccessToken("test@occupify.com", "123", "USER");
 
         Thread.sleep(50);
@@ -61,7 +62,7 @@ class JwtUtilsTest {
     @Test
     void shouldRejectTokenWithWrongSignature() {
         String differentSecret = "different-secret-key-that-is-also-at-least-64-bytes-long-for-hs512-testing!!";
-        JwtUtils otherJwtUtils = new JwtUtils(differentSecret, ACCESS_EXPIRATION_MS, REFRESH_EXPIRATION_MS);
+        JwtUtils otherJwtUtils = new JwtUtilsImpl(differentSecret, ACCESS_EXPIRATION_MS, REFRESH_EXPIRATION_MS);
 
         String token = otherJwtUtils.generateAccessToken("user@occupify.com", "456", "USER");
 
@@ -104,6 +105,6 @@ class JwtUtilsTest {
     @Test
     void shouldThrowExceptionWhenSecretIsTooShort() {
         assertThrows(IllegalArgumentException.class,
-                () -> new JwtUtils("too-short-secret", ACCESS_EXPIRATION_MS, REFRESH_EXPIRATION_MS));
+                () -> new JwtUtilsImpl("too-short-secret", ACCESS_EXPIRATION_MS, REFRESH_EXPIRATION_MS));
     }
 }
