@@ -1,22 +1,27 @@
-package com.occupify.identity.controller;
+package com.occupify.identity.controller.auth;
 
-import com.occupify.identity.dto.request.ForgotPasswordRequest;
-import com.occupify.identity.dto.request.LoginRequest;
-import com.occupify.identity.dto.request.RegisterRequest;
-import com.occupify.identity.dto.request.ResetPasswordRequest;
-import com.occupify.identity.dto.request.SendOtpRequest;
-import com.occupify.identity.dto.request.VerifyOtpRequest;
-import com.occupify.identity.dto.response.ApiResponse;
-import com.occupify.identity.dto.response.AuthResponse;
-import com.occupify.identity.dto.response.RegisterResponse;
-import com.occupify.identity.dto.response.TokenRefreshResponse;
-import com.occupify.identity.exception.AuthErrorCode;
-import com.occupify.identity.exception.AuthException;
-import com.occupify.identity.service.AuthService;
+import com.occupify.identity.config.OpenApiConfig;
+import com.occupify.identity.dto.base.ApiResponse;
+import com.occupify.identity.dto.request.auth.ChangePasswordRequest;
+import com.occupify.identity.dto.request.auth.ForgotPasswordRequest;
+import com.occupify.identity.dto.request.auth.LoginRequest;
+import com.occupify.identity.dto.request.auth.RegisterRequest;
+import com.occupify.identity.dto.request.auth.ResetPasswordRequest;
+import com.occupify.identity.dto.request.auth.SendOtpRequest;
+import com.occupify.identity.dto.request.auth.VerifyOtpRequest;
+import com.occupify.identity.dto.response.auth.AuthResponse;
+import com.occupify.identity.dto.response.auth.UserResponse;
+import com.occupify.identity.exception.auth.AuthErrorCode;
+import com.occupify.identity.exception.auth.AuthException;
+import com.occupify.identity.security.AuthenticationGatewayFilter;
+import com.occupify.identity.security.JwtUtils;
+import com.occupify.identity.service.auth.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -31,28 +36,25 @@ import reactor.core.publisher.Mono;
 @Tag(name = "Authentication", description = "Auth & Session APIs")
 public class AuthController {
 
-    private final AuthService authService;
+    private static final String BEARER_PREFIX = "Bearer ";
 
-    public AuthController(AuthService authService) {
+    private final AuthService authService;
+    private final JwtUtils jwtUtils;
+
+    public AuthController(AuthService authService, JwtUtils jwtUtils) {
         this.authService = authService;
+        this.jwtUtils = jwtUtils;
     }
 
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Register")
-    public Mono<ApiResponse<RegisterResponse>> register(@Valid @RequestBody RegisterRequest request) {
-        return authService.register(request)
-                .map(data -> ApiResponse.created("Account registered successfully. Please verify OTP sent to your email.", data));
-    }
-
-    @PostMapping("/send-otp")
     @Operation(
-            summary = "Send OTP",
-            description = "Dispatch a 6-digit verification OTP to the user's email for registration activation or password reset"
+            summary = "Register",
+            description = "Register a new user account and automatically send a verification OTP to the user's email"
     )
-    public Mono<ApiResponse<Void>> sendOtp(@Valid @RequestBody SendOtpRequest request) {
-        return authService.sendOtp(request)
-                .thenReturn(ApiResponse.ok("OTP sent to your email successfully"));
+    public Mono<ApiResponse<UserResponse>> register(@Valid @RequestBody RegisterRequest request) {
+        return authService.register(request)
+                .map(data -> ApiResponse.created("Account registered successfully. Verification OTP has been sent to your email.", data));
     }
 
     @PostMapping("/resend-otp")
@@ -84,7 +86,7 @@ public class AuthController {
 
     @PostMapping("/refresh-token")
     @Operation(summary = "Refresh access token")
-    public Mono<ApiResponse<TokenRefreshResponse>> refreshToken(
+    public Mono<ApiResponse<AuthResponse>> refreshToken(
             @Parameter(description = "Refresh token", required = true)
             @RequestHeader(value = "X-Refresh-Token", required = false) String refreshToken) {
         if (refreshToken == null || refreshToken.isBlank()) {
@@ -107,7 +109,10 @@ public class AuthController {
     }
 
     @PostMapping("/forgot-password")
-    @Operation(summary = "Forgot password")
+    @Operation(
+            summary = "Forgot password",
+            description = "Initiate password reset and automatically send a reset OTP to the user's email"
+    )
     public Mono<ApiResponse<Void>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
         return authService.forgotPassword(request)
                 .thenReturn(ApiResponse.ok("Password reset OTP sent to your email"));
@@ -118,5 +123,30 @@ public class AuthController {
     public Mono<ApiResponse<Void>> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
         return authService.resetPassword(request)
                 .thenReturn(ApiResponse.ok("Password reset successfully. Please sign in with your new password."));
+    }
+
+    @PostMapping("/change-password")
+    @Operation(summary = "Change password")
+    @SecurityRequirement(name = OpenApiConfig.SECURITY_SCHEME_NAME)
+    public Mono<ApiResponse<Void>> changePassword(
+            @RequestHeader(value = AuthenticationGatewayFilter.HEADER_USER_EMAIL, required = false) String injectedEmail,
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader,
+            @Valid @RequestBody ChangePasswordRequest request) {
+        String userEmail = resolveUserEmail(injectedEmail, authHeader);
+        return authService.changePassword(userEmail, request)
+                .thenReturn(ApiResponse.ok("Password changed successfully"));
+    }
+
+    private String resolveUserEmail(String injectedEmail, String authHeader) {
+        if (injectedEmail != null && !injectedEmail.isBlank()) {
+            return injectedEmail;
+        }
+        if (authHeader != null && authHeader.startsWith(BEARER_PREFIX) && jwtUtils != null) {
+            String token = authHeader.substring(BEARER_PREFIX.length()).trim();
+            if (jwtUtils.validateToken(token)) {
+                return jwtUtils.extractEmail(token);
+            }
+        }
+        throw new AuthException(AuthErrorCode.AUTH_003, "Authentication token or identity context required");
     }
 }
