@@ -29,6 +29,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 @RestController
@@ -129,9 +130,10 @@ public class AuthController {
     @Operation(summary = "Change password")
     @SecurityRequirement(name = OpenApiConfig.SECURITY_SCHEME_NAME)
     public Mono<ApiResponse<Void>> changePassword(
-            @RequestHeader(value = AuthenticationGatewayFilter.HEADER_USER_EMAIL, required = false) String injectedEmail,
-            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader,
-            @Valid @RequestBody ChangePasswordRequest request) {
+            @Valid @RequestBody ChangePasswordRequest request,
+            ServerWebExchange exchange) {
+        String injectedEmail = exchange.getRequest().getHeaders().getFirst(AuthenticationGatewayFilter.HEADER_USER_EMAIL);
+        String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
         String userEmail = resolveUserEmail(injectedEmail, authHeader);
         return authService.changePassword(userEmail, request)
                 .thenReturn(ApiResponse.ok("Password changed successfully"));
