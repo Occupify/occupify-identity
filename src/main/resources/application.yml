@@ -32,18 +32,12 @@ spring:
       port: ${REDIS_PORT:6379}
       timeout: 2000ms
 
-  # --- SMTP Email Configuration for Password Reset OTP ---
-  mail:
-    host: ${MAIL_HOST:localhost}
-    port: ${MAIL_PORT:587}
-    username: ${MAIL_USERNAME:no-reply@occupify.com}
-    password: ${MAIL_PASSWORD:}
-    properties:
-      mail:
-        smtp:
-          auth: ${MAIL_SMTP_AUTH:false}
-          starttls:
-            enable: ${MAIL_SMTP_STARTTLS:false}
+  # --- RabbitMQ Message Broker Configuration ---
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
   
   cloud:
     gateway:
@@ -113,4 +107,9 @@ app:
     expiration-seconds: ${OTP_EXPIRATION_SECONDS:300}
     max-attempts: ${OTP_MAX_ATTEMPTS:3}
     cooldown-seconds: ${OTP_COOLDOWN_SECONDS:60}
+  
+  rabbitmq:
+    exchange: ${RABBITMQ_NOTIFICATION_EXCHANGE:occupify.notification.exchange}
+    user-registered-routing-key: ${RABBITMQ_USER_REGISTERED_ROUTING_KEY:user.registered}
+    password-reset-routing-key: ${RABBITMQ_PASSWORD_RESET_ROUTING_KEY:user.password-reset}
 

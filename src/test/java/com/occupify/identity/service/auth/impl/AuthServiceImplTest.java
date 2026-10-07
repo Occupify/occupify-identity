@@ -18,7 +18,9 @@ import com.occupify.identity.exception.auth.AuthException;
 import com.occupify.identity.repository.UserRepository;
 import com.occupify.identity.security.JwtUtils;
 import com.occupify.identity.security.impl.JwtUtilsImpl;
-import com.occupify.identity.service.email.EmailService;
+import com.occupify.identity.event.PasswordResetRequestedEvent;
+import com.occupify.identity.event.UserRegisteredEvent;
+import com.occupify.identity.producer.UserEventProducer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -54,7 +56,7 @@ class AuthServiceImplTest {
 	private PasswordEncoder passwordEncoder;
 
 	@Mock
-	private EmailService emailService;
+	private UserEventProducer userEventProducer;
 
 	@Mock
 	private ReactiveRedisOperations<String, String> redisTemplate;
@@ -80,7 +82,7 @@ class AuthServiceImplTest {
 				userRepository,
 				passwordEncoder,
 				jwtUtils,
-				emailService,
+				userEventProducer,
 				redisTemplate,
 				revokeAllSessionsScript,
 				objectMapper,
@@ -128,7 +130,7 @@ class AuthServiceImplTest {
 		when(passwordEncoder.encode("Password123!")).thenReturn("encoded-pass");
 		when(userRepository.save(any(User.class))).thenReturn(Mono.just(savedUser));
 		mockRedisOtpGeneration("otp:register:newuser@occupify.com");
-		when(emailService.sendRegistrationOtp(eq("newuser@occupify.com"), anyString())).thenReturn(Mono.empty());
+		when(userEventProducer.publishUserRegistered(any(UserRegisteredEvent.class))).thenReturn(Mono.empty());
 
 		StepVerifier.create(authService.register(request))
 				.assertNext(response -> {
@@ -139,7 +141,7 @@ class AuthServiceImplTest {
 				})
 				.verifyComplete();
 
-		verify(emailService).sendRegistrationOtp(eq("newuser@occupify.com"), anyString());
+		verify(userEventProducer).publishUserRegistered(argThat(event -> "newuser@occupify.com".equals(event.email()) && userId.equals(event.userId())));
 	}
 
 	@Test
@@ -167,7 +169,7 @@ class AuthServiceImplTest {
 		when(userRepository.updatePasswordByEmail("inactive@occupify.com", "new-encoded-pass"))
 				.thenReturn(Mono.just(1));
 		mockRedisOtpGeneration("otp:register:inactive@occupify.com");
-		when(emailService.sendRegistrationOtp(eq("inactive@occupify.com"), anyString())).thenReturn(Mono.empty());
+		when(userEventProducer.publishUserRegistered(any(UserRegisteredEvent.class))).thenReturn(Mono.empty());
 
 		StepVerifier.create(authService.register(request))
 				.assertNext(response -> {
@@ -178,7 +180,7 @@ class AuthServiceImplTest {
 				.verifyComplete();
 
 		verify(userRepository).updatePasswordByEmail("inactive@occupify.com", "new-encoded-pass");
-		verify(emailService).sendRegistrationOtp(eq("inactive@occupify.com"), anyString());
+		verify(userEventProducer).publishUserRegistered(argThat(event -> "inactive@occupify.com".equals(event.email())));
 	}
 
 	@Test
@@ -189,12 +191,12 @@ class AuthServiceImplTest {
 
 		when(userRepository.findByEmail("inactive@occupify.com")).thenReturn(Mono.just(user));
 		mockRedisOtpGeneration("otp:register:inactive@occupify.com");
-		when(emailService.sendRegistrationOtp(eq("inactive@occupify.com"), anyString())).thenReturn(Mono.empty());
+		when(userEventProducer.publishUserRegistered(any(UserRegisteredEvent.class))).thenReturn(Mono.empty());
 
 		StepVerifier.create(authService.resendOtp(request))
 				.verifyComplete();
 
-		verify(emailService).sendRegistrationOtp(eq("inactive@occupify.com"), anyString());
+		verify(userEventProducer).publishUserRegistered(argThat(event -> "inactive@occupify.com".equals(event.email())));
 	}
 
 	@Test
@@ -205,12 +207,12 @@ class AuthServiceImplTest {
 
 		when(userRepository.findByEmail("active@occupify.com")).thenReturn(Mono.just(user));
 		mockRedisOtpGeneration("otp:forgot_password:active@occupify.com");
-		when(emailService.sendPasswordResetOtp(eq("active@occupify.com"), anyString())).thenReturn(Mono.empty());
+		when(userEventProducer.publishPasswordResetRequested(any(PasswordResetRequestedEvent.class))).thenReturn(Mono.empty());
 
 		StepVerifier.create(authService.resendOtp(request))
 				.verifyComplete();
 
-		verify(emailService).sendPasswordResetOtp(eq("active@occupify.com"), anyString());
+		verify(userEventProducer).publishPasswordResetRequested(argThat(event -> "active@occupify.com".equals(event.email())));
 	}
 
 	@Test
