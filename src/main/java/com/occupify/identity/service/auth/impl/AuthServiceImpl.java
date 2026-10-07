@@ -19,8 +19,10 @@ import com.occupify.identity.exception.auth.AuthErrorCode;
 import com.occupify.identity.exception.auth.AuthException;
 import com.occupify.identity.repository.UserRepository;
 import com.occupify.identity.security.JwtUtils;
+import com.occupify.identity.event.PasswordResetRequestedEvent;
+import com.occupify.identity.event.UserRegisteredEvent;
+import com.occupify.identity.producer.UserEventProducer;
 import com.occupify.identity.service.auth.AuthService;
-import com.occupify.identity.service.email.EmailService;
 import com.occupify.identity.util.EmailUtil;
 import com.occupify.identity.util.PasswordUtil;
 import lombok.extern.slf4j.Slf4j;
@@ -34,6 +36,7 @@ import reactor.core.publisher.Mono;
 
 import java.security.SecureRandom;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -53,7 +56,7 @@ public class AuthServiceImpl implements AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtils jwtUtils;
-    private final EmailService emailService;
+    private final UserEventProducer userEventProducer;
     private final ReactiveRedisOperations<String, String> redisTemplate;
     private final RedisScript<Long> revokeAllSessionsScript;
     private final ObjectMapper objectMapper;
@@ -70,7 +73,7 @@ public class AuthServiceImpl implements AuthService {
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
             JwtUtils jwtUtils,
-            EmailService emailService,
+            UserEventProducer userEventProducer,
             ReactiveRedisOperations<String, String> redisTemplate,
             RedisScript<Long> revokeAllSessionsScript,
             ObjectMapper objectMapper,
@@ -82,7 +85,7 @@ public class AuthServiceImpl implements AuthService {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtils = jwtUtils;
-        this.emailService = emailService;
+        this.userEventProducer = userEventProducer;
         this.redisTemplate = redisTemplate;
         this.revokeAllSessionsScript = revokeAllSessionsScript;
         this.objectMapper = objectMapper;
@@ -253,7 +256,11 @@ public class AuthServiceImpl implements AuthService {
                 .filter(rows -> rows > 0)
                 .switchIfEmpty(Mono.error(new AuthException(AuthErrorCode.USER_001, "Failed to update user credentials")))
                 .flatMap(rows -> generateAndStoreOtp(existingUser.getEmail(), OtpType.REGISTER))
-                .flatMap(rawOtp -> emailService.sendRegistrationOtp(existingUser.getEmail(), rawOtp))
+                .flatMap(rawOtp -> userEventProducer.publishUserRegistered(new UserRegisteredEvent(
+                        existingUser.getId(),
+                        existingUser.getEmail(),
+                        rawOtp,
+                        Instant.now())))
                 .thenReturn(mapToUserResponse(existingUser));
     }
 
@@ -262,7 +269,11 @@ public class AuthServiceImpl implements AuthService {
         User newUser = User.createInactive(email, encodedPassword);
         return userRepository.save(newUser)
                 .flatMap(savedUser -> generateAndStoreOtp(email, OtpType.REGISTER)
-                        .flatMap(rawOtp -> emailService.sendRegistrationOtp(email, rawOtp))
+                        .flatMap(rawOtp -> userEventProducer.publishUserRegistered(new UserRegisteredEvent(
+                                savedUser.getId(),
+                                savedUser.getEmail(),
+                                rawOtp,
+                                Instant.now())))
                         .thenReturn(mapToUserResponse(savedUser)));
     }
 
@@ -270,16 +281,24 @@ public class AuthServiceImpl implements AuthService {
         return userRepository.findByEmail(email)
                 .switchIfEmpty(Mono.error(new AuthException(AuthErrorCode.AUTH_012)))
                 .flatMap(this::validateRegistrationEligibility)
-                .flatMap(user -> generateAndStoreOtp(email, OtpType.REGISTER))
-                .flatMap(rawOtp -> emailService.sendRegistrationOtp(email, rawOtp));
+                .flatMap(user -> generateAndStoreOtp(email, OtpType.REGISTER)
+                        .flatMap(rawOtp -> userEventProducer.publishUserRegistered(new UserRegisteredEvent(
+                                user.getId(),
+                                user.getEmail(),
+                                rawOtp,
+                                Instant.now()))));
     }
 
     private Mono<Void> sendForgotPasswordOtp(String email) {
         return userRepository.findByEmail(email)
                 .switchIfEmpty(Mono.error(new AuthException(AuthErrorCode.AUTH_012)))
                 .flatMap(this::validateUserStatus)
-                .flatMap(user -> generateAndStoreOtp(email, OtpType.FORGOT_PASSWORD))
-                .flatMap(rawOtp -> emailService.sendPasswordResetOtp(email, rawOtp));
+                .flatMap(user -> generateAndStoreOtp(email, OtpType.FORGOT_PASSWORD)
+                        .flatMap(rawOtp -> userEventProducer.publishPasswordResetRequested(new PasswordResetRequestedEvent(
+                                user.getId(),
+                                user.getEmail(),
+                                rawOtp,
+                                Instant.now()))));
     }
 
     // ==========================================
