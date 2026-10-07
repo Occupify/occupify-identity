@@ -159,18 +159,29 @@ public class AuthController {
     }
 
     @PostMapping("/reset-password")
-    @Operation(summary = "Reset password")
-    @SecurityRequirement(name = OpenApiConfig.SECURITY_SCHEME_NAME)
+    @Operation(summary = "Reset password", description = "Reset user password using reset token obtained from /auth/verify-otp, new password, and confirm password")
     public Mono<ApiResponse<Void>> resetPassword(
             @Valid @RequestBody ResetPasswordRequest request,
+            @Parameter(description = "Reset token (optional if provided in request body)") @RequestHeader(value = "X-Reset-Token", required = false) String resetTokenHeader,
             ServerWebExchange exchange) {
-        String injectedEmail = exchange.getRequest().getHeaders()
-                .getFirst(AuthenticationGatewayFilter.HEADER_USER_EMAIL);
         String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
-        String userEmail = resolveUserEmail(injectedEmail, authHeader);
-        log.info("[POST /auth/reset-password] Resetting password for email: {}", userEmail);
-        return authService.resetPassword(userEmail, request)
+        String resolvedToken = resolveResetToken(request.resetToken(), resetTokenHeader, authHeader);
+        log.info("[POST /auth/reset-password] Reset password request");
+        return authService.resetPassword(resolvedToken, request)
                 .thenReturn(ApiResponse.ok("Password reset successfully. Please sign in with your new password."));
+    }
+
+    private String resolveResetToken(String bodyToken, String headerToken, String authHeader) {
+        if (bodyToken != null && !bodyToken.isBlank()) {
+            return cleanToken(bodyToken);
+        }
+        if (headerToken != null && !headerToken.isBlank()) {
+            return cleanToken(headerToken);
+        }
+        if (authHeader != null && !authHeader.isBlank()) {
+            return cleanToken(authHeader);
+        }
+        return null;
     }
 
     @PostMapping("/change-password")

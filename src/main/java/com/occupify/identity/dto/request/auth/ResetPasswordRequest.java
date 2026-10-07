@@ -12,6 +12,9 @@ public record ResetPasswordRequest(
 
         @NotBlank(message = "Confirm password must not be blank")
         @Schema(description = "Confirmation of new password", example = "newPassword123!")
-        String confirmPassword
+        String confirmPassword,
+
+        @Schema(description = "Reset token obtained from /auth/verify-otp (optional if passed via Authorization Bearer or X-Reset-Token header)", example = "550e8400-e29b-41d4-a716-446655440000")
+        String resetToken
 ) {
 }

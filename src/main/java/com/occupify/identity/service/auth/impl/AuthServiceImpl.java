@@ -208,9 +208,10 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
-    public Mono<Void> resetPassword(String userEmail, ResetPasswordRequest request) {
-        if (userEmail == null || userEmail.isBlank()) {
-            return Mono.error(new AuthException(AuthErrorCode.AUTH_003, "Authentication token or identity context required"));
+    public Mono<Void> resetPassword(String rawResetToken, ResetPasswordRequest request) {
+        String resetToken = cleanToken(rawResetToken != null && !rawResetToken.isBlank() ? rawResetToken : request.resetToken());
+        if (resetToken == null || resetToken.isBlank()) {
+            return Mono.error(new AuthException(AuthErrorCode.AUTH_016, "Password reset token is required"));
         }
 
         if (request.confirmPassword() == null || !request.newPassword().equals(request.confirmPassword())) {
@@ -218,11 +219,12 @@ public class AuthServiceImpl implements AuthService {
         }
 
         PasswordUtil.validate(request.newPassword());
-        String normalizedEmail = EmailUtil.normalize(userEmail);
 
-        return userRepository.findByEmail(normalizedEmail)
-                .switchIfEmpty(Mono.error(new AuthException(AuthErrorCode.USER_001)))
-                .flatMap(user -> updatePasswordAndInvalidateSessions(normalizedEmail, request.newPassword()));
+        return resolveEmailFromResetToken(resetToken)
+                .flatMap(email -> userRepository.findByEmail(email)
+                        .switchIfEmpty(Mono.error(new AuthException(AuthErrorCode.USER_001)))
+                        .flatMap(user -> updatePasswordAndInvalidateSessions(email, request.newPassword()))
+                        .then(deletePasswordResetToken(resetToken)));
     }
 
     @Override
@@ -547,6 +549,15 @@ public class AuthServiceImpl implements AuthService {
                 .set(key, normalizedEmail, RESET_TOKEN_TTL)
                 .doOnSuccess(v -> log.info("Generated reset token for user [{}]", normalizedEmail))
                 .thenReturn(resetToken);
+    }
+
+    private Mono<String> resolveEmailFromResetToken(String resetToken) {
+        if (resetToken == null || resetToken.isBlank()) {
+            return Mono.error(new AuthException(AuthErrorCode.AUTH_016, "Password reset token is required"));
+        }
+        String key = KEY_PREFIX_RESET_TOKEN + resetToken.trim();
+        return redisTemplate.opsForValue().get(key)
+                .switchIfEmpty(Mono.error(new AuthException(AuthErrorCode.AUTH_016, "Invalid or expired password reset token")));
     }
 
     private Mono<String> validatePasswordResetToken(String email, String resetToken) {

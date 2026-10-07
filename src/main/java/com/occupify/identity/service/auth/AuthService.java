@@ -27,7 +27,7 @@ public interface AuthService {
 
     Mono<Void> forgotPassword(ForgotPasswordRequest request);
 
-    Mono<Void> resetPassword(String userEmail, ResetPasswordRequest request);
+    Mono<Void> resetPassword(String resetToken, ResetPasswordRequest request);
 
     Mono<Void> changePassword(String userEmail, ChangePasswordRequest request);
 }
