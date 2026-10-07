@@ -53,12 +53,12 @@ public class AuthController {
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Register", description = "Register a new user account and automatically send a verification OTP to the user's email")
-    public Mono<ApiResponse<Void>> register(@Valid @RequestBody RegisterRequest request) {
+    public Mono<ApiResponse<UserResponse>> register(@Valid @RequestBody RegisterRequest request) {
         log.info("[POST /auth/register] Register request for email: {}", request.email());
         return authService.register(request)
                 .map(data -> ApiResponse.created(
                         "Account registered successfully. Verification OTP has been sent to your email.",
-                        null));
+                        data));
     }
 
     @PostMapping("/resend-otp")
@@ -89,12 +89,14 @@ public class AuthController {
     @Operation(summary = "Refresh access token")
     public Mono<ApiResponse<AuthResponse>> refreshToken(
             @Parameter(description = "Refresh token in header (optional if provided in body or Authorization header)") @RequestHeader(value = "X-Refresh-Token", required = false) String refreshTokenHeader,
+            @RequestBody(required = false) RefreshTokenRequest requestBody,
             ServerWebExchange exchange) {
         log.info("[POST /auth/refresh-token] Refresh token request");
-        if (refreshTokenHeader == null || refreshTokenHeader.isBlank()) {
+        String refreshToken = resolveRefreshToken(refreshTokenHeader, requestBody, exchange);
+        if (refreshToken == null || refreshToken.isBlank()) {
             return Mono.error(new AuthException(AuthErrorCode.AUTH_004));
         }
-        return authService.refreshToken(refreshTokenHeader)
+        return authService.refreshToken(refreshToken)
                 .map(data -> ApiResponse.ok("Token refreshed successfully", data));
     }
 
@@ -123,7 +125,11 @@ public class AuthController {
         } else if (exchange != null) {
             String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
             if (authHeader != null && !authHeader.isBlank()) {
-                rawToken = authHeader;
+                if (authHeader.startsWith("Bearer ")) {
+                    rawToken = authHeader.substring(7).trim();
+                } else {
+                    rawToken = authHeader.trim();
+                }
             }
         }
         return cleanToken(rawToken);
