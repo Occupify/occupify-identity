@@ -23,9 +23,12 @@ import com.occupify.identity.event.PasswordResetRequestedEvent;
 import com.occupify.identity.event.UserRegisteredEvent;
 import com.occupify.identity.producer.UserEventProducer;
 import com.occupify.identity.service.auth.AuthService;
+import com.occupify.identity.mapper.UserMapper;
 import com.occupify.identity.util.EmailUtil;
+import com.occupify.identity.util.OtpUtils;
 import com.occupify.identity.util.PasswordUtil;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.ReactiveRedisOperations;
 import org.springframework.data.redis.core.script.RedisScript;
@@ -34,22 +37,17 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
 
-import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+import static com.occupify.identity.constant.RedisConstants.*;
+
 @Slf4j
 @Service
 public class AuthServiceImpl implements AuthService {
 
-    // Redis key prefixes
-    private static final String KEY_PREFIX_REFRESH_TOKEN = "refresh_token:";
-    private static final String KEY_PREFIX_USER_SESSIONS = "user_sessions:";
-    private static final String KEY_PREFIX_REGISTER = "otp:register:";
-    private static final String KEY_PREFIX_FORGOT_PASSWORD = "otp:forgot_password:";
-    private static final String KEY_PREFIX_RESET_TOKEN = "password_reset_token:";
     private static final Duration RESET_TOKEN_TTL = Duration.ofMinutes(10);
 
     // Dependencies
@@ -60,7 +58,8 @@ public class AuthServiceImpl implements AuthService {
     private final ReactiveRedisOperations<String, String> redisTemplate;
     private final RedisScript<Long> revokeAllSessionsScript;
     private final ObjectMapper objectMapper;
-    private final SecureRandom secureRandom = new SecureRandom();
+    private final OtpUtils otpUtils;
+    private final UserMapper userMapper;
 
     // Configuration values
     private final int otpLength;
@@ -69,6 +68,7 @@ public class AuthServiceImpl implements AuthService {
     private final long cooldownMillis;
     private final Duration refreshTokenTtl;
 
+    @Autowired
     public AuthServiceImpl(
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
@@ -77,6 +77,8 @@ public class AuthServiceImpl implements AuthService {
             ReactiveRedisOperations<String, String> redisTemplate,
             RedisScript<Long> revokeAllSessionsScript,
             ObjectMapper objectMapper,
+            OtpUtils otpUtils,
+            UserMapper userMapper,
             @Value("${app.otp.length:6}") int otpLength,
             @Value("${app.otp.expiration-seconds:300}") long otpExpirationSeconds,
             @Value("${app.otp.max-attempts:3}") int maxAttempts,
@@ -89,11 +91,31 @@ public class AuthServiceImpl implements AuthService {
         this.redisTemplate = redisTemplate;
         this.revokeAllSessionsScript = revokeAllSessionsScript;
         this.objectMapper = objectMapper;
+        this.otpUtils = otpUtils;
+        this.userMapper = userMapper;
         this.otpLength = otpLength;
         this.otpExpirationDuration = Duration.ofSeconds(otpExpirationSeconds);
         this.maxAttempts = maxAttempts;
         this.cooldownMillis = cooldownSeconds * 1000L;
         this.refreshTokenTtl = Duration.ofMillis(refreshTokenExpirationMs);
+    }
+
+    public AuthServiceImpl(
+            UserRepository userRepository,
+            PasswordEncoder passwordEncoder,
+            JwtUtils jwtUtils,
+            UserEventProducer userEventProducer,
+            ReactiveRedisOperations<String, String> redisTemplate,
+            RedisScript<Long> revokeAllSessionsScript,
+            ObjectMapper objectMapper,
+            int otpLength,
+            long otpExpirationSeconds,
+            int maxAttempts,
+            long cooldownSeconds,
+            long refreshTokenExpirationMs) {
+        this(userRepository, passwordEncoder, jwtUtils, userEventProducer, redisTemplate,
+                revokeAllSessionsScript, objectMapper, new OtpUtils(), new UserMapper(),
+                otpLength, otpExpirationSeconds, maxAttempts, cooldownSeconds, refreshTokenExpirationMs);
     }
 
     // Records for internal Redis data structures
@@ -413,12 +435,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private UserResponse mapToUserResponse(User user) {
-        return new UserResponse(
-                user.getId(),
-                user.getEmail(),
-                user.getRole(),
-                user.getStatus(),
-                user.getCreatedAt());
+        return userMapper.toUserResponse(user);
     }
 
     private void validateEmailAndPassword(String email, String password) {
@@ -661,11 +678,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private String generateNumericOtp(int length) {
-        StringBuilder sb = new StringBuilder(length);
-        for (int i = 0; i < length; i++) {
-            sb.append(secureRandom.nextInt(10));
-        }
-        return sb.toString();
+        return otpUtils.generateNumericOtp(length);
     }
 
     private String buildOtpKey(String email, OtpType type) {
