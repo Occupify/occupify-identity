@@ -7,19 +7,16 @@ import org.springframework.http.HttpStatus;
 public abstract class BaseException extends RuntimeException {
 
     private final String code;
-    private final HttpStatus status;
+    private final HttpStatus httpStatus;
 
-    protected BaseException(String code, String message, HttpStatus status) {
+    protected BaseException(String code, String message, HttpStatus httpStatus) {
         super(message);
         this.code = code;
-        this.status = status;
+        this.httpStatus = httpStatus;
     }
 
-    public String getCode() {
-        return code;
-    }
-
+    // Alias for compatibility
     public HttpStatus getStatus() {
-        return status;
+        return httpStatus;
     }
 }

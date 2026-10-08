@@ -252,12 +252,11 @@ class AuthControllerTest {
 
         @Test
         void shouldResetPasswordWith200Ok() {
-                ResetPasswordRequest request = new ResetPasswordRequest("NewPassword123!", "NewPassword123!");
-                when(authService.resetPassword(eq("user@occupify.com"), any(ResetPasswordRequest.class))).thenReturn(Mono.empty());
+                ResetPasswordRequest request = new ResetPasswordRequest("NewPassword123!", "NewPassword123!", "reset-token-123");
+                when(authService.resetPassword(eq("reset-token-123"), any(ResetPasswordRequest.class))).thenReturn(Mono.empty());
 
                 webTestClient.post()
                                 .uri("/auth/reset-password")
-                                .header(AuthenticationGatewayFilter.HEADER_USER_EMAIL, "user@occupify.com")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .bodyValue(request)
                                 .exchange()

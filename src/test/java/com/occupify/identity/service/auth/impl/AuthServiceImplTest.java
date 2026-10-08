@@ -408,29 +408,33 @@ class AuthServiceImplTest {
 	}
 
 	@Test
-	void shouldResetPasswordSuccessfullyWhenAuthenticated() {
-		ResetPasswordRequest request = new ResetPasswordRequest("NewPassword789!", "NewPassword789!");
+	void shouldResetPasswordSuccessfullyWithResetToken() {
+		ResetPasswordRequest request = new ResetPasswordRequest("NewPassword789!", "NewPassword789!", "valid-reset-token");
 		User user = new User(UUID.randomUUID(), "user@occupify.com", "old-pass", "USER", "ACTIVE",
 				Instant.now(), Instant.now());
 
+		when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+		when(valueOperations.get("password_reset_token:valid-reset-token")).thenReturn(Mono.just("user@occupify.com"));
 		when(userRepository.findByEmail("user@occupify.com")).thenReturn(Mono.just(user));
 		when(passwordEncoder.encode("NewPassword789!")).thenReturn("new-encoded-pass");
 		when(userRepository.updatePasswordByEmail("user@occupify.com", "new-encoded-pass"))
 				.thenReturn(Mono.just(1));
 		mockRedisRevokeAllSessions();
+		when(redisTemplate.delete("password_reset_token:valid-reset-token")).thenReturn(Mono.just(1L));
 
-		StepVerifier.create(authService.resetPassword("user@occupify.com", request))
+		StepVerifier.create(authService.resetPassword("valid-reset-token", request))
 				.verifyComplete();
 
 		verify(userRepository).updatePasswordByEmail("user@occupify.com", "new-encoded-pass");
 		verify(redisTemplate).execute(eq(revokeAllSessionsScript), eq(List.of("user_sessions:user@occupify.com")));
+		verify(redisTemplate).delete("password_reset_token:valid-reset-token");
 	}
 
 	@Test
 	void shouldFailResetPasswordWhenConfirmPasswordIsDifferent() {
-		ResetPasswordRequest request = new ResetPasswordRequest("NewPassword789!", "DifferentPassword123!");
+		ResetPasswordRequest request = new ResetPasswordRequest("NewPassword789!", "DifferentPassword123!", "valid-reset-token");
 
-		StepVerifier.create(authService.resetPassword("user@occupify.com", request))
+		StepVerifier.create(authService.resetPassword("valid-reset-token", request))
 				.expectErrorMatches(throwable -> throwable instanceof AuthException authEx
 						&& authEx.getErrorCode() == AuthErrorCode.AUTH_017
 						&& authEx.getMessage().contains("Confirm password is different"))
@@ -438,12 +442,24 @@ class AuthServiceImplTest {
 	}
 
 	@Test
-	void shouldFailResetPasswordWhenUnauthenticated() {
-		ResetPasswordRequest request = new ResetPasswordRequest("NewPassword789!", "NewPassword789!");
+	void shouldFailResetPasswordWhenResetTokenIsMissing() {
+		ResetPasswordRequest request = new ResetPasswordRequest("NewPassword789!", "NewPassword789!", null);
 
 		StepVerifier.create(authService.resetPassword("", request))
 				.expectErrorMatches(throwable -> throwable instanceof AuthException authEx
-						&& authEx.getErrorCode() == AuthErrorCode.AUTH_003)
+						&& authEx.getErrorCode() == AuthErrorCode.AUTH_016)
+				.verify();
+	}
+
+	@Test
+	void shouldFailResetPasswordWhenResetTokenIsInvalidOrExpired() {
+		ResetPasswordRequest request = new ResetPasswordRequest("NewPassword789!", "NewPassword789!", "expired-token");
+		when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+		when(valueOperations.get("password_reset_token:expired-token")).thenReturn(Mono.empty());
+
+		StepVerifier.create(authService.resetPassword("expired-token", request))
+				.expectErrorMatches(throwable -> throwable instanceof AuthException authEx
+						&& authEx.getErrorCode() == AuthErrorCode.AUTH_016)
 				.verify();
 	}
 

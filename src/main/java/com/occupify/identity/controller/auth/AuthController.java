@@ -1,7 +1,10 @@
 package com.occupify.identity.controller.auth;
 
 import com.occupify.identity.config.OpenApiConfig;
-import com.occupify.identity.dto.base.ApiResponse;
+import com.occupify.identity.controller.AbstractBaseController;
+import com.occupify.identity.dto.base.CreatedResponse;
+import com.occupify.identity.dto.base.SingleResponse;
+import com.occupify.identity.dto.base.SuccessResponse;
 import com.occupify.identity.dto.request.auth.ChangePasswordRequest;
 import com.occupify.identity.dto.request.auth.ForgotPasswordRequest;
 import com.occupify.identity.dto.request.auth.LoginRequest;
@@ -22,8 +25,8 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import org.springframework.http.HttpHeaders;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -34,13 +37,13 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
+import static com.occupify.identity.constant.SecurityConstants.BEARER_PREFIX;
+
 @Slf4j
 @RestController
 @RequestMapping("/auth")
-@Tag(name = "Authentication", description = "Auth & Session APIs")
-public class AuthController {
-
-    private static final String BEARER_PREFIX = "Bearer ";
+@Tag(name = "Authentication", description = "Endpoints for user authentication and session management")
+public class AuthController extends AbstractBaseController {
 
     private final AuthService authService;
     private final JwtUtils jwtUtils;
@@ -53,41 +56,41 @@ public class AuthController {
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Register", description = "Register a new user account and automatically send a verification OTP to the user's email")
-    public Mono<ApiResponse<UserResponse>> register(@Valid @RequestBody RegisterRequest request) {
+    public Mono<CreatedResponse<UserResponse>> register(@Valid @RequestBody RegisterRequest request) {
         log.info("[POST /auth/register] Register request for email: {}", request.email());
         return authService.register(request)
-                .map(data -> ApiResponse.created(
-                        "Account registered successfully. Verification OTP has been sent to your email.",
-                        data));
+                .map(data -> created(
+                        data,
+                        "Account registered successfully. Verification OTP has been sent to your email."));
     }
 
     @PostMapping("/resend-otp")
     @Operation(summary = "Resend OTP", description = "Resend a new 6-digit verification OTP to the user's email subject to cooldown restrictions")
-    public Mono<ApiResponse<Void>> resendOtp(@Valid @RequestBody SendOtpRequest request) {
+    public Mono<SuccessResponse> resendOtp(@Valid @RequestBody SendOtpRequest request) {
         log.info("[POST /auth/resend-otp] Resend OTP request for email: {}", request.email());
         return authService.resendOtp(request)
-                .thenReturn(ApiResponse.ok("OTP resent to your email successfully"));
+                .thenReturn(success("OTP resent to your email successfully"));
     }
 
     @PostMapping("/verify-otp")
     @Operation(summary = "Verify OTP", description = "Verify submitted OTP code: activates account and returns auth tokens for REGISTER, or returns a reset token for FORGOT_PASSWORD")
-    public Mono<ApiResponse<Object>> verifyOtp(@Valid @RequestBody VerifyOtpRequest request) {
+    public Mono<SingleResponse<Object>> verifyOtp(@Valid @RequestBody VerifyOtpRequest request) {
         log.info("[POST /auth/verify-otp] Verifying OTP for email: {}", request.email());
         return authService.verifyOtp(request)
-                .map(data -> ApiResponse.ok("OTP verified successfully", data));
+                .map(data -> successSingle(data, "OTP verified successfully"));
     }
 
     @PostMapping("/login")
-    @Operation(summary = "Login")
-    public Mono<ApiResponse<AuthResponse>> login(@Valid @RequestBody LoginRequest request) {
+    @Operation(summary = "Login", description = "Authenticate user using email and password")
+    public Mono<SingleResponse<AuthResponse>> login(@Valid @RequestBody LoginRequest request) {
         log.info("[POST /auth/login] Login attempt for email: {}", request.email());
         return authService.login(request)
-                .map(data -> ApiResponse.ok("Login successful", data));
+                .map(data -> successSingle(data, "Login successful"));
     }
 
     @PostMapping("/refresh-token")
-    @Operation(summary = "Refresh access token")
-    public Mono<ApiResponse<AuthResponse>> refreshToken(
+    @Operation(summary = "Refresh access token", description = "Obtain a new access token using a valid refresh token")
+    public Mono<SingleResponse<AuthResponse>> refreshToken(
             @Parameter(description = "Refresh token in header (optional if provided in body or Authorization header)") @RequestHeader(value = "X-Refresh-Token", required = false) String refreshTokenHeader,
             @RequestBody(required = false) RefreshTokenRequest requestBody,
             ServerWebExchange exchange) {
@@ -97,12 +100,12 @@ public class AuthController {
             return Mono.error(new AuthException(AuthErrorCode.AUTH_004));
         }
         return authService.refreshToken(refreshToken)
-                .map(data -> ApiResponse.ok("Token refreshed successfully", data));
+                .map(data -> successSingle(data, "Token refreshed successfully"));
     }
 
     @PostMapping("/sign-out")
-    @Operation(summary = "Sign out")
-    public Mono<ApiResponse<Void>> signOut(
+    @Operation(summary = "Sign out", description = "Logout the user and invalidate active session tokens")
+    public Mono<SuccessResponse> signOut(
             @Parameter(description = "Refresh token in header (optional if provided in body or Authorization header)") @RequestHeader(value = "X-Refresh-Token", required = false) String refreshTokenHeader,
             @RequestBody(required = false) RefreshTokenRequest requestBody,
             ServerWebExchange exchange) {
@@ -112,11 +115,47 @@ public class AuthController {
             return Mono.error(new AuthException(AuthErrorCode.AUTH_004));
         }
         return authService.signOut(refreshToken)
-                .thenReturn(ApiResponse.ok("Signed out successfully"));
+                .thenReturn(success("Signed out successfully"));
+    }
+
+    @PostMapping("/forgot-password")
+    @Operation(summary = "Forgot password", description = "Initiate password reset and automatically send a reset OTP to the user's email")
+    public Mono<SuccessResponse> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        log.info("[POST /auth/forgot-password] Forgot password request for email: {}", request.email());
+        return authService.forgotPassword(request)
+                .thenReturn(success("Password reset OTP sent to your email"));
+    }
+
+    @PostMapping("/reset-password")
+    @Operation(summary = "Reset password", description = "Reset user password using reset token obtained from /auth/verify-otp, new password, and confirm password")
+    public Mono<SuccessResponse> resetPassword(
+            @Valid @RequestBody ResetPasswordRequest request,
+            @Parameter(description = "Reset token (optional if provided in request body)") @RequestHeader(value = "X-Reset-Token", required = false) String resetTokenHeader,
+            ServerWebExchange exchange) {
+        String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
+        String resolvedToken = resolveResetToken(request.resetToken(), resetTokenHeader, authHeader);
+        log.info("[POST /auth/reset-password] Reset password request");
+        return authService.resetPassword(resolvedToken, request)
+                .thenReturn(success("Password reset successfully. Please sign in with your new password."));
+    }
+
+    @PostMapping("/change-password")
+    @Operation(summary = "Change password", description = "Change user password for authenticated account")
+    @SecurityRequirement(name = OpenApiConfig.SECURITY_SCHEME_NAME)
+    public Mono<SuccessResponse> changePassword(
+            @Valid @RequestBody ChangePasswordRequest request,
+            ServerWebExchange exchange) {
+        String injectedEmail = exchange.getRequest().getHeaders()
+                .getFirst(AuthenticationGatewayFilter.HEADER_USER_EMAIL);
+        String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
+        String userEmail = resolveUserEmail(injectedEmail, authHeader);
+        log.info("[POST /auth/change-password] Changing password for email: {}", userEmail);
+        return authService.changePassword(userEmail, request)
+                .thenReturn(success("Password changed successfully"));
     }
 
     private String resolveRefreshToken(String headerToken, RefreshTokenRequest bodyRequest,
-            ServerWebExchange exchange) {
+                                        ServerWebExchange exchange) {
         String rawToken = null;
         if (bodyRequest != null && bodyRequest.refreshToken() != null && !bodyRequest.refreshToken().isBlank()) {
             rawToken = bodyRequest.refreshToken();
@@ -150,42 +189,17 @@ public class AuthController {
         return cleaned.isBlank() ? null : cleaned;
     }
 
-    @PostMapping("/forgot-password")
-    @Operation(summary = "Forgot password", description = "Initiate password reset and automatically send a reset OTP to the user's email")
-    public Mono<ApiResponse<Void>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
-        log.info("[POST /auth/forgot-password] Forgot password request for email: {}", request.email());
-        return authService.forgotPassword(request)
-                .thenReturn(ApiResponse.ok("Password reset OTP sent to your email"));
-    }
-
-    @PostMapping("/reset-password")
-    @Operation(summary = "Reset password")
-    @SecurityRequirement(name = OpenApiConfig.SECURITY_SCHEME_NAME)
-    public Mono<ApiResponse<Void>> resetPassword(
-            @Valid @RequestBody ResetPasswordRequest request,
-            ServerWebExchange exchange) {
-        String injectedEmail = exchange.getRequest().getHeaders()
-                .getFirst(AuthenticationGatewayFilter.HEADER_USER_EMAIL);
-        String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
-        String userEmail = resolveUserEmail(injectedEmail, authHeader);
-        log.info("[POST /auth/reset-password] Resetting password for email: {}", userEmail);
-        return authService.resetPassword(userEmail, request)
-                .thenReturn(ApiResponse.ok("Password reset successfully. Please sign in with your new password."));
-    }
-
-    @PostMapping("/change-password")
-    @Operation(summary = "Change password")
-    @SecurityRequirement(name = OpenApiConfig.SECURITY_SCHEME_NAME)
-    public Mono<ApiResponse<Void>> changePassword(
-            @Valid @RequestBody ChangePasswordRequest request,
-            ServerWebExchange exchange) {
-        String injectedEmail = exchange.getRequest().getHeaders()
-                .getFirst(AuthenticationGatewayFilter.HEADER_USER_EMAIL);
-        String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
-        String userEmail = resolveUserEmail(injectedEmail, authHeader);
-        log.info("[POST /auth/change-password] Changing password for email: {}", userEmail);
-        return authService.changePassword(userEmail, request)
-                .thenReturn(ApiResponse.ok("Password changed successfully"));
+    private String resolveResetToken(String bodyToken, String headerToken, String authHeader) {
+        if (bodyToken != null && !bodyToken.isBlank()) {
+            return cleanToken(bodyToken);
+        }
+        if (headerToken != null && !headerToken.isBlank()) {
+            return cleanToken(headerToken);
+        }
+        if (authHeader != null && !authHeader.isBlank()) {
+            return cleanToken(authHeader);
+        }
+        return null;
     }
 
     private String resolveUserEmail(String injectedEmail, String authHeader) {
