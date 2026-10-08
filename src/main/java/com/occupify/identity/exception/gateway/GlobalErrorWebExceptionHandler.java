@@ -2,7 +2,7 @@ package com.occupify.identity.exception.gateway;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.occupify.identity.dto.base.GatewayErrorResponse;
+import com.occupify.identity.dto.base.ErrorResponse;
 import com.occupify.identity.exception.BaseException;
 import com.occupify.identity.filter.CorrelationIdFilter;
 import lombok.RequiredArgsConstructor;
@@ -68,20 +68,17 @@ public class GlobalErrorWebExceptionHandler implements ErrorWebExceptionHandler 
         String reasonPhrase = (status instanceof HttpStatus hs) ? hs.getReasonPhrase() : DEFAULT_ERROR_PHRASE;
         String resolvedMessage = message != null ? message : reasonPhrase;
 
-        GatewayErrorResponse.RequestContext context = new GatewayErrorResponse.RequestContext(path, correlationId);
-        GatewayErrorResponse errorResponse = GatewayErrorResponse.of(
+        ErrorResponse errorResponse = new ErrorResponse(
                 status.value(),
-                reasonPhrase,
                 resolvedMessage,
-                errorCode,
-                context
+                errorCode
         );
 
         byte[] bytes;
         try {
             bytes = objectMapper.writeValueAsBytes(errorResponse);
         } catch (JsonProcessingException e) {
-            log.error("[Corr-{}] Failed to serialize GatewayErrorResponse to JSON: {}", correlationId, e.getMessage(), e);
+            log.error("[Corr-{}] Failed to serialize ErrorResponse to JSON: {}", correlationId, e.getMessage(), e);
             bytes = buildFallbackJson(errorResponse);
         }
 
@@ -120,7 +117,7 @@ public class GlobalErrorWebExceptionHandler implements ErrorWebExceptionHandler 
         }
     }
 
-    private byte[] buildFallbackJson(GatewayErrorResponse response) {
+    private byte[] buildFallbackJson(ErrorResponse response) {
         String json = "{\"statusCode\":" + response.statusCode() + ","
                 + "\"message\":\"" + escapeJson(response.message()) + "\""
                 + (response.errorCode() != null ? ",\"errorCode\":\"" + escapeJson(response.errorCode()) + "\"" : "")
