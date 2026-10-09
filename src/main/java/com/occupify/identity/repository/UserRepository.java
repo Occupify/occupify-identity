@@ -1,26 +1,27 @@
 package com.occupify.identity.repository;
 
 import com.occupify.identity.entity.User;
-import org.springframework.data.r2dbc.repository.Modifying;
-import org.springframework.data.r2dbc.repository.Query;
-import org.springframework.data.r2dbc.repository.R2dbcRepository;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
-import reactor.core.publisher.Mono;
 
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-public interface UserRepository extends R2dbcRepository<User, UUID> {
+public interface UserRepository extends JpaRepository<User, UUID> {
 
-    Mono<User> findByEmail(String email);
+    Optional<User> findByEmail(String email);
 
-    Mono<Boolean> existsByEmail(String email);
-
-    @Modifying
-    @Query("UPDATE users SET password = :password, updated_at = CURRENT_TIMESTAMP WHERE email = :email")
-    Mono<Integer> updatePasswordByEmail(String email, String password);
+    boolean existsByEmail(String email);
 
     @Modifying
-    @Query("UPDATE users SET status = :status, updated_at = CURRENT_TIMESTAMP WHERE email = :email")
-    Mono<Integer> updateStatusByEmail(String email, String status);
+    @Query("UPDATE User u SET u.password = :password, u.updatedAt = CURRENT_TIMESTAMP WHERE u.email = :email")
+    int updatePasswordByEmail(@Param("email") String email, @Param("password") String password);
+
+    @Modifying
+    @Query("UPDATE User u SET u.status = :status, u.updatedAt = CURRENT_TIMESTAMP WHERE u.email = :email")
+    int updateStatusByEmail(@Param("email") String email, @Param("status") String status);
 }
