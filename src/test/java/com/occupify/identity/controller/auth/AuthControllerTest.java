@@ -1,8 +1,10 @@
 package com.occupify.identity.controller.auth;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.occupify.identity.dto.request.auth.ChangePasswordRequest;
 import com.occupify.identity.dto.request.auth.ForgotPasswordRequest;
 import com.occupify.identity.dto.request.auth.LoginRequest;
+import com.occupify.identity.dto.request.auth.RefreshTokenRequest;
 import com.occupify.identity.dto.request.auth.RegisterRequest;
 import com.occupify.identity.dto.request.auth.ResetPasswordRequest;
 import com.occupify.identity.dto.request.auth.SendOtpRequest;
@@ -14,7 +16,6 @@ import com.occupify.identity.enums.OtpType;
 import com.occupify.identity.exception.GlobalExceptionHandler;
 import com.occupify.identity.exception.auth.AuthErrorCode;
 import com.occupify.identity.exception.auth.AuthException;
-import com.occupify.identity.security.AuthenticationGatewayFilter;
 import com.occupify.identity.security.JwtUtils;
 import com.occupify.identity.security.impl.JwtUtilsImpl;
 import com.occupify.identity.service.auth.AuthService;
@@ -25,361 +26,305 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
-import org.springframework.test.web.reactive.server.WebTestClient;
-import reactor.core.publisher.Mono;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.time.Instant;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @ExtendWith(MockitoExtension.class)
 class AuthControllerTest {
 
-        private static final String TEST_SECRET = "occupify-super-secret-jwt-signing-key-for-unit-testing-must-be-at-least-64-bytes-long!";
+    private static final String TEST_SECRET = "occupify-super-secret-jwt-signing-key-for-unit-testing-must-be-at-least-64-bytes-long!";
 
-        @Mock
-        private AuthService authService;
+    @Mock
+    private AuthService authService;
 
-        private JwtUtils jwtUtils;
-        private WebTestClient webTestClient;
+    private JwtUtils jwtUtils;
+    private MockMvc mockMvc;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
-        @BeforeEach
-        void setUp() {
-                jwtUtils = new JwtUtilsImpl(TEST_SECRET, 3600000, 604800000);
-                AuthController controller = new AuthController(authService, jwtUtils);
-                webTestClient = WebTestClient.bindToController(controller)
-                                .controllerAdvice(new GlobalExceptionHandler())
-                                .build();
-        }
+    @BeforeEach
+    void setUp() {
+        jwtUtils = new JwtUtilsImpl(TEST_SECRET, 3600000, 604800000);
+        AuthController controller = new AuthController(authService, jwtUtils);
+        mockMvc = MockMvcBuilders.standaloneSetup(controller)
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .build();
+    }
 
-        @Test
-        void shouldRegisterAccountWith201Created() {
-                RegisterRequest request = new RegisterRequest("new@occupify.com", "Password123!");
-                UUID userId = UUID.randomUUID();
-                UserResponse registerResponse = new UserResponse(userId, "new@occupify.com", "USER", "INACTIVE", Instant.now());
+    @Test
+    void shouldRegisterAccountWith201Created() throws Exception {
+        RegisterRequest request = new RegisterRequest("new@occupify.com", "Password123!");
+        UUID userId = UUID.randomUUID();
+        UserResponse registerResponse = new UserResponse(userId, "new@occupify.com", "USER", "INACTIVE", Instant.now());
 
-                when(authService.register(any(RegisterRequest.class))).thenReturn(Mono.just(registerResponse));
+        when(authService.register(any(RegisterRequest.class))).thenReturn(registerResponse);
 
-                webTestClient.post()
-                                .uri("/auth/register")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .bodyValue(request)
-                                .exchange()
-                                .expectStatus().isCreated()
-                                .expectBody()
-                                .jsonPath("$.statusCode").isEqualTo(201)
-                                .jsonPath("$.data.email").isEqualTo("new@occupify.com")
-                                .jsonPath("$.data.status").isEqualTo("INACTIVE");
-        }
+        mockMvc.perform(post("/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.statusCode").value(201))
+                .andExpect(jsonPath("$.data.email").value("new@occupify.com"))
+                .andExpect(jsonPath("$.data.status").value("INACTIVE"));
+    }
 
-        @Test
-        void shouldResendOtpWith200Ok() {
-                SendOtpRequest request = new SendOtpRequest("user@occupify.com", OtpType.REGISTER);
-                when(authService.resendOtp(any(SendOtpRequest.class))).thenReturn(Mono.empty());
+    @Test
+    void shouldResendOtpWith200Ok() throws Exception {
+        SendOtpRequest request = new SendOtpRequest("user@occupify.com", OtpType.REGISTER);
+        doNothing().when(authService).resendOtp(any(SendOtpRequest.class));
 
-                webTestClient.post()
-                                .uri("/auth/resend-otp")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .bodyValue(request)
-                                .exchange()
-                                .expectStatus().isOk()
-                                .expectBody()
-                                .jsonPath("$.statusCode").isEqualTo(200)
-                                .jsonPath("$.message").isEqualTo("OTP resent to your email successfully");
-        }
+        mockMvc.perform(post("/auth/resend-otp")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statusCode").value(200))
+                .andExpect(jsonPath("$.message").value("OTP resent to your email successfully"));
+    }
 
-        @Test
-        void shouldVerifyOtpForForgotPasswordWithResetToken() {
-                VerifyOtpRequest request = new VerifyOtpRequest("user@occupify.com", "123456", OtpType.FORGOT_PASSWORD);
-                VerifyOtpResponse verifyResponse = new VerifyOtpResponse("reset-token-abc");
+    @Test
+    void shouldVerifyOtpForForgotPasswordWithResetToken() throws Exception {
+        VerifyOtpRequest request = new VerifyOtpRequest("user@occupify.com", "123456", OtpType.FORGOT_PASSWORD);
+        VerifyOtpResponse verifyResponse = new VerifyOtpResponse("reset-token-abc");
 
-                when(authService.verifyOtp(any(VerifyOtpRequest.class))).thenReturn(Mono.just(verifyResponse));
+        when(authService.verifyOtp(any(VerifyOtpRequest.class))).thenReturn(verifyResponse);
 
-                webTestClient.post()
-                                .uri("/auth/verify-otp")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .bodyValue(request)
-                                .exchange()
-                                .expectStatus().isOk()
-                                .expectBody()
-                                .jsonPath("$.statusCode").isEqualTo(200)
-                                .jsonPath("$.data.resetToken").isEqualTo("reset-token-abc");
-        }
+        mockMvc.perform(post("/auth/verify-otp")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statusCode").value(200))
+                .andExpect(jsonPath("$.data.resetToken").value("reset-token-abc"));
+    }
 
-        @Test
-        void shouldVerifyOtpForRegisterWithAuthResponse() {
-                VerifyOtpRequest request = new VerifyOtpRequest("user@occupify.com", "123456", OtpType.REGISTER);
-                UserResponse userSummary = new UserResponse(UUID.randomUUID(), "user@occupify.com", "USER", "ACTIVE",
-                                Instant.now());
-                AuthResponse authResponse = new AuthResponse("access-token-123", "refresh-token-456", userSummary);
+    @Test
+    void shouldVerifyOtpForRegisterWithAuthResponse() throws Exception {
+        VerifyOtpRequest request = new VerifyOtpRequest("user@occupify.com", "123456", OtpType.REGISTER);
+        UserResponse userSummary = new UserResponse(UUID.randomUUID(), "user@occupify.com", "USER", "ACTIVE",
+                Instant.now());
+        AuthResponse authResponse = new AuthResponse("access-token-123", "refresh-token-456", userSummary);
 
-                when(authService.verifyOtp(any(VerifyOtpRequest.class))).thenReturn(Mono.just(authResponse));
+        when(authService.verifyOtp(any(VerifyOtpRequest.class))).thenReturn(authResponse);
 
-                webTestClient.post()
-                                .uri("/auth/verify-otp")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .bodyValue(request)
-                                .exchange()
-                                .expectStatus().isOk()
-                                .expectBody()
-                                .jsonPath("$.statusCode").isEqualTo(200)
-                                .jsonPath("$.data.accessToken").isEqualTo("access-token-123")
-                                .jsonPath("$.data.user.email").isEqualTo("user@occupify.com");
-        }
+        mockMvc.perform(post("/auth/verify-otp")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statusCode").value(200))
+                .andExpect(jsonPath("$.data.accessToken").value("access-token-123"))
+                .andExpect(jsonPath("$.data.user.email").value("user@occupify.com"));
+    }
 
-        @Test
-        void shouldLoginSuccessfullyWith200Ok() {
-                LoginRequest request = new LoginRequest("user@occupify.com", "Password123!");
-                UserResponse userSummary = new UserResponse(UUID.randomUUID(), "user@occupify.com", "USER", "ACTIVE",
-                                Instant.now());
-                AuthResponse authResponse = new AuthResponse("access-token-123", "refresh-token-456", userSummary);
+    @Test
+    void shouldLoginSuccessfullyWith200Ok() throws Exception {
+        LoginRequest request = new LoginRequest("user@occupify.com", "Password123!");
+        UserResponse userSummary = new UserResponse(UUID.randomUUID(), "user@occupify.com", "USER", "ACTIVE",
+                Instant.now());
+        AuthResponse authResponse = new AuthResponse("access-token-123", "refresh-token-456", userSummary);
 
-                when(authService.login(any(LoginRequest.class))).thenReturn(Mono.just(authResponse));
+        when(authService.login(any(LoginRequest.class))).thenReturn(authResponse);
 
-                webTestClient.post()
-                                .uri("/auth/login")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .bodyValue(request)
-                                .exchange()
-                                .expectStatus().isOk()
-                                .expectBody()
-                                .jsonPath("$.statusCode").isEqualTo(200)
-                                .jsonPath("$.data.accessToken").isEqualTo("access-token-123")
-                                .jsonPath("$.data.user.role").isEqualTo("USER");
-        }
+        mockMvc.perform(post("/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statusCode").value(200))
+                .andExpect(jsonPath("$.data.accessToken").value("access-token-123"))
+                .andExpect(jsonPath("$.data.user.role").value("USER"));
+    }
 
-        @Test
-        void shouldRefreshTokenWith200Ok() {
-                AuthResponse refreshResponse = new AuthResponse("new-access-token", "new-refresh-token");
-                when(authService.refreshToken("valid-refresh-token")).thenReturn(Mono.just(refreshResponse));
+    @Test
+    void shouldRefreshTokenWith200Ok() throws Exception {
+        AuthResponse refreshResponse = new AuthResponse("new-access-token", "new-refresh-token");
+        when(authService.refreshToken("valid-refresh-token")).thenReturn(refreshResponse);
 
-                webTestClient.post()
-                                .uri("/auth/refresh-token")
-                                .header("X-Refresh-Token", "valid-refresh-token")
-                                .exchange()
-                                .expectStatus().isOk()
-                                .expectBody()
-                                .jsonPath("$.statusCode").isEqualTo(200)
-                                .jsonPath("$.data.accessToken").isEqualTo("new-access-token");
-        }
+        mockMvc.perform(post("/auth/refresh-token")
+                .header("X-Refresh-Token", "valid-refresh-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statusCode").value(200))
+                .andExpect(jsonPath("$.data.accessToken").value("new-access-token"));
+    }
 
-        @Test
-        void shouldRefreshTokenWith200OkViaRequestBody() {
-                com.occupify.identity.dto.request.auth.RefreshTokenRequest request = new com.occupify.identity.dto.request.auth.RefreshTokenRequest("valid-refresh-token");
-                AuthResponse refreshResponse = new AuthResponse("new-access-token", "new-refresh-token");
-                when(authService.refreshToken("valid-refresh-token")).thenReturn(Mono.just(refreshResponse));
+    @Test
+    void shouldRefreshTokenWith200OkViaRequestBody() throws Exception {
+        RefreshTokenRequest request = new RefreshTokenRequest("valid-refresh-token");
+        AuthResponse refreshResponse = new AuthResponse("new-access-token", "new-refresh-token");
+        when(authService.refreshToken("valid-refresh-token")).thenReturn(refreshResponse);
 
-                webTestClient.post()
-                                .uri("/auth/refresh-token")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .bodyValue(request)
-                                .exchange()
-                                .expectStatus().isOk()
-                                .expectBody()
-                                .jsonPath("$.statusCode").isEqualTo(200)
-                                .jsonPath("$.data.accessToken").isEqualTo("new-access-token");
-        }
+        mockMvc.perform(post("/auth/refresh-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statusCode").value(200))
+                .andExpect(jsonPath("$.data.accessToken").value("new-access-token"));
+    }
 
-        @Test
-        void shouldRefreshTokenWith200OkViaAuthorizationHeader() {
-                AuthResponse refreshResponse = new AuthResponse("new-access-token", "new-refresh-token");
-                when(authService.refreshToken("valid-refresh-token")).thenReturn(Mono.just(refreshResponse));
+    @Test
+    void shouldRefreshTokenWith200OkViaAuthorizationHeader() throws Exception {
+        AuthResponse refreshResponse = new AuthResponse("new-access-token", "new-refresh-token");
+        when(authService.refreshToken("valid-refresh-token")).thenReturn(refreshResponse);
 
-                webTestClient.post()
-                                .uri("/auth/refresh-token")
-                                .header(HttpHeaders.AUTHORIZATION, "Bearer valid-refresh-token")
-                                .exchange()
-                                .expectStatus().isOk()
-                                .expectBody()
-                                .jsonPath("$.statusCode").isEqualTo(200)
-                                .jsonPath("$.data.accessToken").isEqualTo("new-access-token");
-        }
+        mockMvc.perform(post("/auth/refresh-token")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer valid-refresh-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statusCode").value(200))
+                .andExpect(jsonPath("$.data.accessToken").value("new-access-token"));
+    }
 
-        @Test
-        void shouldReturn400WhenRefreshTokenHeaderIsMissing() {
-                webTestClient.post()
-                                .uri("/auth/refresh-token")
-                                .exchange()
-                                .expectStatus().isBadRequest()
-                                .expectBody()
-                                .jsonPath("$.statusCode").isEqualTo(400)
-                                .jsonPath("$.errorCode").isEqualTo("AUTH_004");
-        }
+    @Test
+    void shouldReturn400WhenRefreshTokenHeaderIsMissing() throws Exception {
+        mockMvc.perform(post("/auth/refresh-token"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.statusCode").value(400))
+                .andExpect(jsonPath("$.errorCode").value("AUTH_004"));
+    }
 
-        @Test
-        void shouldSignOutWith200Ok() {
-                when(authService.signOut("valid-refresh-token")).thenReturn(Mono.empty());
+    @Test
+    void shouldSignOutWith200Ok() throws Exception {
+        doNothing().when(authService).signOut("valid-refresh-token");
 
-                webTestClient.post()
-                                .uri("/auth/sign-out")
-                                .header("X-Refresh-Token", "valid-refresh-token")
-                                .exchange()
-                                .expectStatus().isOk()
-                                .expectBody()
-                                .jsonPath("$.statusCode").isEqualTo(200)
-                                .jsonPath("$.message").isEqualTo("Signed out successfully");
-        }
+        mockMvc.perform(post("/auth/sign-out")
+                .header("X-Refresh-Token", "valid-refresh-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statusCode").value(200))
+                .andExpect(jsonPath("$.message").value("Signed out successfully"));
+    }
 
-        @Test
-        void shouldReturn400WhenSignOutRefreshTokenIsMissing() {
-                webTestClient.post()
-                                .uri("/auth/sign-out")
-                                .exchange()
-                                .expectStatus().isBadRequest()
-                                .expectBody()
-                                .jsonPath("$.statusCode").isEqualTo(400)
-                                .jsonPath("$.errorCode").isEqualTo("AUTH_004");
-        }
+    @Test
+    void shouldReturn400WhenSignOutRefreshTokenIsMissing() throws Exception {
+        mockMvc.perform(post("/auth/sign-out"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.statusCode").value(400))
+                .andExpect(jsonPath("$.errorCode").value("AUTH_004"));
+    }
 
-        @Test
-        void shouldForgotPasswordWith200Ok() {
-                ForgotPasswordRequest request = new ForgotPasswordRequest("user@occupify.com");
-                when(authService.forgotPassword(any(ForgotPasswordRequest.class))).thenReturn(Mono.empty());
+    @Test
+    void shouldForgotPasswordWith200Ok() throws Exception {
+        ForgotPasswordRequest request = new ForgotPasswordRequest("user@occupify.com");
+        doNothing().when(authService).forgotPassword(any(ForgotPasswordRequest.class));
 
-                webTestClient.post()
-                                .uri("/auth/forgot-password")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .bodyValue(request)
-                                .exchange()
-                                .expectStatus().isOk()
-                                .expectBody()
-                                .jsonPath("$.statusCode").isEqualTo(200)
-                                .jsonPath("$.message").isEqualTo("Password reset OTP sent to your email");
-        }
+        mockMvc.perform(post("/auth/forgot-password")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statusCode").value(200))
+                .andExpect(jsonPath("$.message").value("Password reset OTP sent to your email"));
+    }
 
-        @Test
-        void shouldResetPasswordWith200Ok() {
-                ResetPasswordRequest request = new ResetPasswordRequest("NewPassword123!", "NewPassword123!", "reset-token-123");
-                when(authService.resetPassword(eq("reset-token-123"), any(ResetPasswordRequest.class))).thenReturn(Mono.empty());
+    @Test
+    void shouldResetPasswordWith200Ok() throws Exception {
+        ResetPasswordRequest request = new ResetPasswordRequest("NewPassword123!", "NewPassword123!", "reset-token-123");
+        doNothing().when(authService).resetPassword(eq("reset-token-123"), any(ResetPasswordRequest.class));
 
-                webTestClient.post()
-                                .uri("/auth/reset-password")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .bodyValue(request)
-                                .exchange()
-                                .expectStatus().isOk()
-                                .expectBody()
-                                .jsonPath("$.statusCode").isEqualTo(200)
-                                .jsonPath("$.message")
-                                .isEqualTo("Password reset successfully. Please sign in with your new password.");
-        }
+        mockMvc.perform(post("/auth/reset-password")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statusCode").value(200))
+                .andExpect(jsonPath("$.message")
+                        .value("Password reset successfully. Please sign in with your new password."));
+    }
 
-        @Test
-        void shouldRejectInvalidEmailFormatDuringRegister() {
-                RegisterRequest request = new RegisterRequest("invalid-email", "Password123!");
+    @Test
+    void shouldRejectInvalidEmailFormatDuringRegister() throws Exception {
+        RegisterRequest request = new RegisterRequest("invalid-email", "Password123!");
 
-                webTestClient.post()
-                                .uri("/auth/register")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .bodyValue(request)
-                                .exchange()
-                                .expectStatus().isBadRequest()
-                                .expectBody()
-                                .jsonPath("$.statusCode").isEqualTo(400)
-                                .jsonPath("$.errorCode").isEqualTo("AUTH_000");
-        }
+        mockMvc.perform(post("/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.statusCode").value(400))
+                .andExpect(jsonPath("$.errorCode").value("AUTH_000"));
+    }
 
-        @Test
-        void shouldRejectShortPasswordDuringRegister() {
-                RegisterRequest request = new RegisterRequest("user@occupify.com", "short");
+    @Test
+    void shouldRejectShortPasswordDuringRegister() throws Exception {
+        RegisterRequest request = new RegisterRequest("user@occupify.com", "short");
 
-                webTestClient.post()
-                                .uri("/auth/register")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .bodyValue(request)
-                                .exchange()
-                                .expectStatus().isBadRequest()
-                                .expectBody()
-                                .jsonPath("$.statusCode").isEqualTo(400)
-                                .jsonPath("$.errorCode").isEqualTo("AUTH_002");
-        }
+        mockMvc.perform(post("/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.statusCode").value(400))
+                .andExpect(jsonPath("$.errorCode").value("AUTH_002"));
+    }
 
-        @Test
-        void shouldHandleValidationErrorsThroughAdvice() {
-                ForgotPasswordRequest request = new ForgotPasswordRequest("not-an-email");
+    @Test
+    void shouldHandleValidationErrorsThroughAdvice() throws Exception {
+        ForgotPasswordRequest request = new ForgotPasswordRequest("not-an-email");
 
-                webTestClient.post()
-                                .uri("/auth/forgot-password")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .bodyValue(request)
-                                .exchange()
-                                .expectStatus().isBadRequest()
-                                .expectBody()
-                                .jsonPath("$.statusCode").isEqualTo(400)
-                                .jsonPath("$.errorCode").isEqualTo("AUTH_000");
-        }
+        mockMvc.perform(post("/auth/forgot-password")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.statusCode").value(400))
+                .andExpect(jsonPath("$.errorCode").value("AUTH_000"));
+    }
 
-        @Test
-        void shouldHandleAuthExceptionThroughAdvice() {
-                LoginRequest request = new LoginRequest("user@occupify.com", "Password123!");
-                when(authService.login(any(LoginRequest.class)))
-                                .thenReturn(Mono.error(new AuthException(AuthErrorCode.AUTH_003)));
+    @Test
+    void shouldHandleAuthExceptionThroughAdvice() throws Exception {
+        LoginRequest request = new LoginRequest("user@occupify.com", "Password123!");
+        when(authService.login(any(LoginRequest.class)))
+                .thenThrow(new AuthException(AuthErrorCode.AUTH_003));
 
-                webTestClient.post()
-                                .uri("/auth/login")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .bodyValue(request)
-                                .exchange()
-                                .expectStatus().isUnauthorized()
-                                .expectBody()
-                                .jsonPath("$.statusCode").isEqualTo(401)
-                                .jsonPath("$.errorCode").isEqualTo("AUTH_003")
-                                .jsonPath("$.message").isEqualTo("Invalid email or password");
-        }
+        mockMvc.perform(post("/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.statusCode").value(401))
+                .andExpect(jsonPath("$.errorCode").value("AUTH_003"))
+                .andExpect(jsonPath("$.message").value("Invalid email or password"));
+    }
 
-        @Test
-        void shouldChangePasswordWith200OkUsingInjectedHeader() {
-                ChangePasswordRequest request = new ChangePasswordRequest("OldPassword123!", "NewPassword123!");
-                when(authService.changePassword(eq("injected@occupify.com"), any(ChangePasswordRequest.class)))
-                                .thenReturn(Mono.empty());
+    @Test
+    void shouldChangePasswordWith200OkUsingInjectedHeader() throws Exception {
+        ChangePasswordRequest request = new ChangePasswordRequest("OldPassword123!", "NewPassword123!");
+        doNothing().when(authService).changePassword(eq("injected@occupify.com"), any(ChangePasswordRequest.class));
 
-                webTestClient.post()
-                                .uri("/auth/change-password")
-                                .header("X-User-Email", "injected@occupify.com")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .bodyValue(request)
-                                .exchange()
-                                .expectStatus().isOk()
-                                .expectBody()
-                                .jsonPath("$.statusCode").isEqualTo(200)
-                                .jsonPath("$.message").isEqualTo("Password changed successfully");
-        }
+        mockMvc.perform(post("/auth/change-password")
+                .header("X-User-Email", "injected@occupify.com")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statusCode").value(200))
+                .andExpect(jsonPath("$.message").value("Password changed successfully"));
+    }
 
-        @Test
-        void shouldChangePasswordWith200OkUsingBearerToken() {
-                ChangePasswordRequest request = new ChangePasswordRequest("OldPassword123!", "NewPassword123!");
-                String token = jwtUtils.generateAccessToken("tokenuser@occupify.com", UUID.randomUUID().toString(),
-                                "USER");
-                when(authService.changePassword(eq("tokenuser@occupify.com"), any(ChangePasswordRequest.class)))
-                                .thenReturn(Mono.empty());
+    @Test
+    void shouldChangePasswordWith200OkUsingBearerToken() throws Exception {
+        ChangePasswordRequest request = new ChangePasswordRequest("OldPassword123!", "NewPassword123!");
+        String token = jwtUtils.generateAccessToken("tokenuser@occupify.com", UUID.randomUUID().toString(),
+                "USER");
+        doNothing().when(authService).changePassword(eq("tokenuser@occupify.com"), any(ChangePasswordRequest.class));
 
-                webTestClient.post()
-                                .uri("/auth/change-password")
-                                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .bodyValue(request)
-                                .exchange()
-                                .expectStatus().isOk()
-                                .expectBody()
-                                .jsonPath("$.statusCode").isEqualTo(200)
-                                .jsonPath("$.message").isEqualTo("Password changed successfully");
-        }
+        mockMvc.perform(post("/auth/change-password")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statusCode").value(200))
+                .andExpect(jsonPath("$.message").value("Password changed successfully"));
+    }
 
-        @Test
-        void shouldReturn401WhenChangePasswordHasNoIdentityHeadersOrToken() {
-                ChangePasswordRequest request = new ChangePasswordRequest("OldPassword123!", "NewPassword123!");
+    @Test
+    void shouldReturn401WhenChangePasswordHasNoIdentityHeadersOrToken() throws Exception {
+        ChangePasswordRequest request = new ChangePasswordRequest("OldPassword123!", "NewPassword123!");
 
-                webTestClient.post()
-                                .uri("/auth/change-password")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .bodyValue(request)
-                                .exchange()
-                                .expectStatus().isUnauthorized()
-                                .expectBody()
-                                .jsonPath("$.statusCode").isEqualTo(401)
-                                .jsonPath("$.errorCode").isEqualTo("AUTH_003");
-        }
+        mockMvc.perform(post("/auth/change-password")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.statusCode").value(401))
+                .andExpect(jsonPath("$.errorCode").value("AUTH_003"));
+    }
 }
