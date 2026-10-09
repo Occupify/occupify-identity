@@ -8,8 +8,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Schedulers;
 
 @Slf4j
 @Component
@@ -28,20 +26,16 @@ public class UserEventProducerImpl implements UserEventProducer {
     private String passwordResetRoutingKey;
 
     @Override
-    public Mono<Void> publishUserRegistered(UserRegisteredEvent event) {
-        return Mono.fromRunnable(() -> {
-            log.info("[Event Producer] Publishing UserRegisteredEvent for user [{}] ({}) to exchange [{}] with routingKey [{}]",
-                    event.userId(), event.email(), exchange, userRegisteredRoutingKey);
-            rabbitTemplate.convertAndSend(exchange, userRegisteredRoutingKey, event);
-        }).subscribeOn(Schedulers.boundedElastic()).then();
+    public void publishUserRegistered(UserRegisteredEvent event) {
+        log.info("[Event Producer] Publishing UserRegisteredEvent for user [{}] ({}) to exchange [{}] with routingKey [{}]",
+                event.userId(), event.email(), exchange, userRegisteredRoutingKey);
+        rabbitTemplate.convertAndSend(exchange, userRegisteredRoutingKey, event);
     }
 
     @Override
-    public Mono<Void> publishPasswordResetRequested(PasswordResetRequestedEvent event) {
-        return Mono.fromRunnable(() -> {
-            log.info("[Event Producer] Publishing PasswordResetRequestedEvent for user [{}] ({}) to exchange [{}] with routingKey [{}]",
-                    event.userId(), event.email(), exchange, passwordResetRoutingKey);
-            rabbitTemplate.convertAndSend(exchange, passwordResetRoutingKey, event);
-        }).subscribeOn(Schedulers.boundedElastic()).then();
+    public void publishPasswordResetRequested(PasswordResetRequestedEvent event) {
+        log.info("[Event Producer] Publishing PasswordResetRequestedEvent for user [{}] ({}) to exchange [{}] with routingKey [{}]",
+                event.userId(), event.email(), exchange, passwordResetRoutingKey);
+        rabbitTemplate.convertAndSend(exchange, passwordResetRoutingKey, event);
     }
 }

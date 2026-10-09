@@ -10,7 +10,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
-import reactor.test.StepVerifier;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -40,8 +39,7 @@ class UserEventProducerImplTest {
         UUID userId = UUID.randomUUID();
         UserRegisteredEvent event = new UserRegisteredEvent(userId, "test@occupify.com", "123456", Instant.now());
 
-        StepVerifier.create(userEventProducer.publishUserRegistered(event))
-                .verifyComplete();
+        userEventProducer.publishUserRegistered(event);
 
         ArgumentCaptor<UserRegisteredEvent> captor = ArgumentCaptor.forClass(UserRegisteredEvent.class);
         verify(rabbitTemplate).convertAndSend(eq("occupify.notification.exchange"), eq("user.registered"), captor.capture());
@@ -57,8 +55,7 @@ class UserEventProducerImplTest {
         UUID userId = UUID.randomUUID();
         PasswordResetRequestedEvent event = new PasswordResetRequestedEvent(userId, "test@occupify.com", "654321", Instant.now());
 
-        StepVerifier.create(userEventProducer.publishPasswordResetRequested(event))
-                .verifyComplete();
+        userEventProducer.publishPasswordResetRequested(event);
 
         ArgumentCaptor<PasswordResetRequestedEvent> captor = ArgumentCaptor.forClass(PasswordResetRequestedEvent.class);
         verify(rabbitTemplate).convertAndSend(eq("occupify.notification.exchange"), eq("user.password-reset"), captor.capture());

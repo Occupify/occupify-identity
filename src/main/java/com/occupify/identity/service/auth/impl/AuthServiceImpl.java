@@ -17,29 +17,29 @@ import com.occupify.identity.enums.OtpType;
 import com.occupify.identity.enums.UserStatus;
 import com.occupify.identity.exception.auth.AuthErrorCode;
 import com.occupify.identity.exception.auth.AuthException;
-import com.occupify.identity.repository.UserRepository;
-import com.occupify.identity.security.JwtUtils;
 import com.occupify.identity.event.PasswordResetRequestedEvent;
 import com.occupify.identity.event.UserRegisteredEvent;
-import com.occupify.identity.producer.UserEventProducer;
-import com.occupify.identity.service.auth.AuthService;
 import com.occupify.identity.mapper.UserMapper;
+import com.occupify.identity.producer.UserEventProducer;
+import com.occupify.identity.repository.UserRepository;
+import com.occupify.identity.security.JwtUtils;
+import com.occupify.identity.service.auth.AuthService;
 import com.occupify.identity.util.EmailUtil;
 import com.occupify.identity.util.OtpUtils;
 import com.occupify.identity.util.PasswordUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.redis.core.ReactiveRedisOperations;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import reactor.core.publisher.Mono;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static com.occupify.identity.constant.RedisConstants.*;
@@ -50,18 +50,16 @@ public class AuthServiceImpl implements AuthService {
 
     private static final Duration RESET_TOKEN_TTL = Duration.ofMinutes(10);
 
-    // Dependencies
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtils jwtUtils;
-    private final UserEventProducer userEventProducer;
-    private final ReactiveRedisOperations<String, String> redisTemplate;
+    private final StringRedisTemplate redisTemplate;
     private final RedisScript<Long> revokeAllSessionsScript;
     private final ObjectMapper objectMapper;
     private final OtpUtils otpUtils;
     private final UserMapper userMapper;
+    private final UserEventProducer userEventProducer;
 
-    // Configuration values
     private final int otpLength;
     private final Duration otpExpirationDuration;
     private final int maxAttempts;
@@ -73,12 +71,12 @@ public class AuthServiceImpl implements AuthService {
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
             JwtUtils jwtUtils,
-            UserEventProducer userEventProducer,
-            ReactiveRedisOperations<String, String> redisTemplate,
+            StringRedisTemplate redisTemplate,
             RedisScript<Long> revokeAllSessionsScript,
             ObjectMapper objectMapper,
             OtpUtils otpUtils,
             UserMapper userMapper,
+            UserEventProducer userEventProducer,
             @Value("${app.otp.length:6}") int otpLength,
             @Value("${app.otp.expiration-seconds:300}") long otpExpirationSeconds,
             @Value("${app.otp.max-attempts:3}") int maxAttempts,
@@ -87,12 +85,12 @@ public class AuthServiceImpl implements AuthService {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtils = jwtUtils;
-        this.userEventProducer = userEventProducer;
         this.redisTemplate = redisTemplate;
         this.revokeAllSessionsScript = revokeAllSessionsScript;
         this.objectMapper = objectMapper;
         this.otpUtils = otpUtils;
         this.userMapper = userMapper;
+        this.userEventProducer = userEventProducer;
         this.otpLength = otpLength;
         this.otpExpirationDuration = Duration.ofSeconds(otpExpirationSeconds);
         this.maxAttempts = maxAttempts;
@@ -104,21 +102,20 @@ public class AuthServiceImpl implements AuthService {
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
             JwtUtils jwtUtils,
-            UserEventProducer userEventProducer,
-            ReactiveRedisOperations<String, String> redisTemplate,
+            StringRedisTemplate redisTemplate,
             RedisScript<Long> revokeAllSessionsScript,
             ObjectMapper objectMapper,
+            UserEventProducer userEventProducer,
             int otpLength,
             long otpExpirationSeconds,
             int maxAttempts,
             long cooldownSeconds,
             long refreshTokenExpirationMs) {
-        this(userRepository, passwordEncoder, jwtUtils, userEventProducer, redisTemplate,
-                revokeAllSessionsScript, objectMapper, new OtpUtils(), new UserMapper(),
+        this(userRepository, passwordEncoder, jwtUtils, redisTemplate,
+                revokeAllSessionsScript, objectMapper, new OtpUtils(), new UserMapper(), userEventProducer,
                 otpLength, otpExpirationSeconds, maxAttempts, cooldownSeconds, refreshTokenExpirationMs);
     }
 
-    // Records for internal Redis data structures
     private record SessionMetadata(UUID userId, String email, long createdAt) {
     }
 
@@ -131,307 +128,295 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
-    public Mono<UserResponse> register(RegisterRequest request) {
+    public UserResponse register(RegisterRequest request) {
         validateEmailAndPassword(request.email(), request.password());
         String normalizedEmail = EmailUtil.normalize(request.email());
 
-        return userRepository.findByEmail(normalizedEmail)
-                .flatMap(existingUser -> handleExistingUserRegistration(existingUser, request.password()))
-                .switchIfEmpty(Mono.defer(() -> handleNewUserRegistration(normalizedEmail, request.password())));
+        Optional<User> existingUserOpt = userRepository.findByEmail(normalizedEmail);
+        if (existingUserOpt.isPresent()) {
+            return handleExistingUserRegistration(existingUserOpt.get(), request.password());
+        } else {
+            return handleNewUserRegistration(normalizedEmail, request.password());
+        }
     }
 
     @Override
-    public Mono<AuthResponse> login(LoginRequest request) {
+    @Transactional(readOnly = true)
+    public AuthResponse login(LoginRequest request) {
         validateEmailAndPassword(request.email(), request.password());
         String normalizedEmail = EmailUtil.normalize(request.email());
 
-        return userRepository.findByEmail(normalizedEmail)
-                .switchIfEmpty(Mono.error(new AuthException(AuthErrorCode.AUTH_003)))
-                .flatMap(user -> authenticateUser(user, request.password()))
-                .flatMap(this::rotateUserSessionAndRespond);
+        User user = userRepository.findByEmail(normalizedEmail)
+                .orElseThrow(() -> new AuthException(AuthErrorCode.AUTH_003));
+        authenticateUser(user, request.password());
+        return rotateUserSessionAndRespond(user);
     }
 
     @Override
-    public Mono<AuthResponse> refreshToken(String rawRefreshToken) {
+    public AuthResponse refreshToken(String rawRefreshToken) {
         String refreshToken = cleanToken(rawRefreshToken);
         if (refreshToken == null || refreshToken.isBlank()) {
-            return Mono.error(new AuthException(AuthErrorCode.AUTH_004));
+            throw new AuthException(AuthErrorCode.AUTH_004);
         }
 
         try {
             jwtUtils.parseClaims(refreshToken);
         } catch (io.jsonwebtoken.ExpiredJwtException e) {
             log.warn("Refresh token expired: {}", e.getMessage());
-            return Mono.error(new AuthException(AuthErrorCode.AUTH_006));
+            throw new AuthException(AuthErrorCode.AUTH_006);
         } catch (Exception e) {
             log.warn("Invalid refresh token format or signature: {}", e.getMessage());
-            return Mono.error(new AuthException(AuthErrorCode.AUTH_005));
+            throw new AuthException(AuthErrorCode.AUTH_005);
         }
 
-        return isValidSession(refreshToken)
-                .flatMap(isValid -> {
-                    if (!Boolean.TRUE.equals(isValid)) {
-                        log.warn("Session invalid or revoked in Redis for token key: [{}]", buildTokenKey(refreshToken));
-                        return Mono.error(new AuthException(AuthErrorCode.AUTH_006));
-                    }
-                    return resolveUserForTokenRefresh(refreshToken);
-                })
-                .flatMap(user -> {
-                    String newAccessToken = jwtUtils.generateAccessToken(
-                            user.getEmail(),
-                            user.getId().toString(),
-                            user.getRole());
-                    String newRefreshToken = jwtUtils.generateRefreshToken(user.getEmail());
+        if (!isValidSession(refreshToken)) {
+            log.warn("Session invalid or revoked in Redis for token key: [{}]", buildTokenKey(refreshToken));
+            throw new AuthException(AuthErrorCode.AUTH_006);
+        }
 
-                    return revokeSession(refreshToken)
-                            .then(saveSession(newRefreshToken, user.getId(), user.getEmail()))
-                            .thenReturn(new AuthResponse(newAccessToken, newRefreshToken, mapToUserResponse(user)));
-                });
+        User user = resolveUserForTokenRefresh(refreshToken);
+        String newAccessToken = jwtUtils.generateAccessToken(
+                user.getEmail(),
+                user.getId().toString(),
+                user.getRole());
+        String newRefreshToken = jwtUtils.generateRefreshToken(user.getEmail());
+
+        revokeSession(refreshToken);
+        saveSession(newRefreshToken, user.getId(), user.getEmail());
+        return new AuthResponse(newAccessToken, newRefreshToken, mapToUserResponse(user));
     }
 
     @Override
-    public Mono<Void> signOut(String rawRefreshToken) {
+    public void signOut(String rawRefreshToken) {
         String refreshToken = cleanToken(rawRefreshToken);
         if (refreshToken == null || refreshToken.isBlank()) {
-            return Mono.error(new AuthException(AuthErrorCode.AUTH_004));
+            throw new AuthException(AuthErrorCode.AUTH_004);
         }
-        return revokeSession(refreshToken).then();
+        revokeSession(refreshToken);
     }
 
     @Override
-    public Mono<Void> resendOtp(SendOtpRequest request) {
+    public void resendOtp(SendOtpRequest request) {
         EmailUtil.validate(request.email());
         String normalizedEmail = EmailUtil.normalize(request.email());
         OtpType type = request.type() != null ? request.type() : OtpType.FORGOT_PASSWORD;
 
-        return type == OtpType.REGISTER
-                ? sendRegisterOtp(normalizedEmail)
-                : sendForgotPasswordOtp(normalizedEmail);
+        if (type == OtpType.REGISTER) {
+            sendRegisterOtp(normalizedEmail);
+        } else {
+            sendForgotPasswordOtp(normalizedEmail);
+        }
     }
 
     @Override
     @Transactional
-    public Mono<Object> verifyOtp(VerifyOtpRequest request) {
+    public Object verifyOtp(VerifyOtpRequest request) {
         EmailUtil.validate(request.email());
         String normalizedEmail = EmailUtil.normalize(request.email());
         OtpType type = request.type() != null ? request.type() : OtpType.FORGOT_PASSWORD;
 
-        return type == OtpType.REGISTER
-                ? verifyRegisterOtp(normalizedEmail, request.otpCode())
-                : verifyForgotPasswordOtp(normalizedEmail, request.otpCode());
+        if (type == OtpType.REGISTER) {
+            return verifyRegisterOtp(normalizedEmail, request.otpCode());
+        } else {
+            return verifyForgotPasswordOtp(normalizedEmail, request.otpCode());
+        }
     }
 
     @Override
-    public Mono<Void> forgotPassword(ForgotPasswordRequest request) {
+    public void forgotPassword(ForgotPasswordRequest request) {
         EmailUtil.validate(request.email());
         String normalizedEmail = EmailUtil.normalize(request.email());
-        return sendForgotPasswordOtp(normalizedEmail);
+        sendForgotPasswordOtp(normalizedEmail);
     }
 
     @Override
     @Transactional
-    public Mono<Void> resetPassword(String rawResetToken, ResetPasswordRequest request) {
+    public void resetPassword(String rawResetToken, ResetPasswordRequest request) {
         String resetToken = cleanToken(rawResetToken != null && !rawResetToken.isBlank() ? rawResetToken : request.resetToken());
         if (resetToken == null || resetToken.isBlank()) {
-            return Mono.error(new AuthException(AuthErrorCode.AUTH_016, "Password reset token is required"));
+            throw new AuthException(AuthErrorCode.AUTH_016, "Password reset token is required");
         }
 
         if (request.confirmPassword() == null || !request.newPassword().equals(request.confirmPassword())) {
-            return Mono.error(new AuthException(AuthErrorCode.AUTH_017, "Confirm password is different"));
+            throw new AuthException(AuthErrorCode.AUTH_017, "Confirm password is different");
         }
 
         PasswordUtil.validate(request.newPassword());
 
-        return resolveEmailFromResetToken(resetToken)
-                .flatMap(email -> userRepository.findByEmail(email)
-                        .switchIfEmpty(Mono.error(new AuthException(AuthErrorCode.USER_001)))
-                        .flatMap(user -> updatePasswordAndInvalidateSessions(email, request.newPassword()))
-                        .then(deletePasswordResetToken(resetToken)));
+        String email = resolveEmailFromResetToken(resetToken);
+        userRepository.findByEmail(email)
+                .orElseThrow(() -> new AuthException(AuthErrorCode.USER_001));
+
+        updatePasswordAndInvalidateSessions(email, request.newPassword());
+        deletePasswordResetToken(resetToken);
     }
 
     @Override
     @Transactional
-    public Mono<Void> changePassword(String userEmail, ChangePasswordRequest request) {
+    public void changePassword(String userEmail, ChangePasswordRequest request) {
         if (userEmail == null || userEmail.isBlank()) {
-            return Mono.error(new AuthException(AuthErrorCode.AUTH_003, "Unauthenticated user context"));
+            throw new AuthException(AuthErrorCode.AUTH_003, "Unauthenticated user context");
         }
         PasswordUtil.validatePasswordChange(request.currentPassword(), request.newPassword());
         String normalizedEmail = EmailUtil.normalize(userEmail);
 
-        return userRepository.findByEmail(normalizedEmail)
-                .switchIfEmpty(Mono.error(new AuthException(AuthErrorCode.USER_001)))
-                .flatMap(user -> verifyCurrentPassword(user, request.currentPassword()))
-                .flatMap(user -> updatePasswordAndInvalidateSessions(normalizedEmail, request.newPassword()));
+        User user = userRepository.findByEmail(normalizedEmail)
+                .orElseThrow(() -> new AuthException(AuthErrorCode.USER_001));
+        verifyCurrentPassword(user, request.currentPassword());
+        updatePasswordAndInvalidateSessions(normalizedEmail, request.newPassword());
     }
 
     // ==========================================
     // Registration Helpers
     // ==========================================
 
-    private Mono<UserResponse> handleExistingUserRegistration(User existingUser, String newPassword) {
+    private UserResponse handleExistingUserRegistration(User existingUser, String newPassword) {
         if (UserStatus.ACTIVE.name().equalsIgnoreCase(existingUser.getStatus())) {
-            return Mono.error(new AuthException(AuthErrorCode.AUTH_001));
+            throw new AuthException(AuthErrorCode.AUTH_001);
         }
         if (UserStatus.BANNED.name().equalsIgnoreCase(existingUser.getStatus())) {
-            return Mono.error(new AuthException(AuthErrorCode.USER_008));
+            throw new AuthException(AuthErrorCode.USER_008);
         }
         String encodedPassword = passwordEncoder.encode(newPassword);
-        return userRepository.updatePasswordByEmail(existingUser.getEmail(), encodedPassword)
-                .filter(rows -> rows > 0)
-                .switchIfEmpty(Mono.error(new AuthException(AuthErrorCode.USER_001, "Failed to update user credentials")))
-                .flatMap(rows -> generateAndStoreOtp(existingUser.getEmail(), OtpType.REGISTER))
-                .flatMap(rawOtp -> userEventProducer.publishUserRegistered(new UserRegisteredEvent(
-                        existingUser.getId(),
-                        existingUser.getEmail(),
-                        rawOtp,
-                        Instant.now())))
-                .thenReturn(mapToUserResponse(existingUser));
+        existingUser.setPassword(encodedPassword);
+        userRepository.save(existingUser);
+        String rawOtp = generateAndStoreOtp(existingUser.getEmail(), OtpType.REGISTER);
+        userEventProducer.publishUserRegistered(new UserRegisteredEvent(
+                existingUser.getId(),
+                existingUser.getEmail(),
+                rawOtp,
+                Instant.now()
+        ));
+        return mapToUserResponse(existingUser);
     }
 
-    private Mono<UserResponse> handleNewUserRegistration(String email, String rawPassword) {
+    private UserResponse handleNewUserRegistration(String email, String rawPassword) {
         String encodedPassword = passwordEncoder.encode(rawPassword);
         User newUser = User.createInactive(email, encodedPassword);
-        return userRepository.save(newUser)
-                .flatMap(savedUser -> generateAndStoreOtp(email, OtpType.REGISTER)
-                        .flatMap(rawOtp -> userEventProducer.publishUserRegistered(new UserRegisteredEvent(
-                                savedUser.getId(),
-                                savedUser.getEmail(),
-                                rawOtp,
-                                Instant.now())))
-                        .thenReturn(mapToUserResponse(savedUser)));
+        User savedUser = userRepository.save(newUser);
+        String rawOtp = generateAndStoreOtp(email, OtpType.REGISTER);
+        userEventProducer.publishUserRegistered(new UserRegisteredEvent(
+                savedUser.getId(),
+                savedUser.getEmail(),
+                rawOtp,
+                Instant.now()
+        ));
+        return mapToUserResponse(savedUser);
     }
 
-    private Mono<Void> sendRegisterOtp(String email) {
-        return userRepository.findByEmail(email)
-                .switchIfEmpty(Mono.error(new AuthException(AuthErrorCode.AUTH_012)))
-                .flatMap(this::validateRegistrationEligibility)
-                .flatMap(user -> generateAndStoreOtp(email, OtpType.REGISTER)
-                        .flatMap(rawOtp -> userEventProducer.publishUserRegistered(new UserRegisteredEvent(
-                                user.getId(),
-                                user.getEmail(),
-                                rawOtp,
-                                Instant.now()))));
+    private void sendRegisterOtp(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new AuthException(AuthErrorCode.AUTH_012));
+        validateRegistrationEligibility(user);
+        String rawOtp = generateAndStoreOtp(email, OtpType.REGISTER);
+        userEventProducer.publishUserRegistered(new UserRegisteredEvent(
+                user.getId(),
+                user.getEmail(),
+                rawOtp,
+                Instant.now()
+        ));
     }
 
-    private Mono<Void> sendForgotPasswordOtp(String email) {
-        return userRepository.findByEmail(email)
-                .switchIfEmpty(Mono.error(new AuthException(AuthErrorCode.AUTH_012)))
-                .flatMap(this::validateUserStatus)
-                .flatMap(user -> generateAndStoreOtp(email, OtpType.FORGOT_PASSWORD)
-                        .flatMap(rawOtp -> userEventProducer.publishPasswordResetRequested(new PasswordResetRequestedEvent(
-                                user.getId(),
-                                user.getEmail(),
-                                rawOtp,
-                                Instant.now()))));
+    private void sendForgotPasswordOtp(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new AuthException(AuthErrorCode.AUTH_012));
+        validateUserStatus(user);
+        String rawOtp = generateAndStoreOtp(email, OtpType.FORGOT_PASSWORD);
+        userEventProducer.publishPasswordResetRequested(new PasswordResetRequestedEvent(
+                user.getId(),
+                user.getEmail(),
+                rawOtp,
+                Instant.now()
+        ));
     }
 
     // ==========================================
     // OTP Verification Helpers
     // ==========================================
 
-    private Mono<Object> verifyRegisterOtp(String email, String otpCode) {
-        return userRepository.findByEmail(email)
-                .switchIfEmpty(Mono.error(new AuthException(AuthErrorCode.AUTH_012)))
-                .flatMap(this::validateRegistrationEligibility)
-                .flatMap(user -> verifyOtpInternal(email, otpCode, OtpType.REGISTER)
-                        .then(userRepository.updateStatusByEmail(email, UserStatus.ACTIVE.name()))
-                        .filter(rows -> rows > 0)
-                        .switchIfEmpty(Mono.error(new AuthException(AuthErrorCode.USER_001, "Failed to activate user account")))
-                        .flatMap(rows -> {
-                            user.setStatus(UserStatus.ACTIVE.name());
-                            return generateAuthResponse(user).map(auth -> (Object) auth);
-                        }));
+    private AuthResponse verifyRegisterOtp(String email, String otpCode) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new AuthException(AuthErrorCode.AUTH_012));
+        validateRegistrationEligibility(user);
+        verifyOtpInternal(email, otpCode, OtpType.REGISTER);
+        user.setStatus(UserStatus.ACTIVE.name());
+        userRepository.save(user);
+        return generateAuthResponse(user);
     }
 
-    private Mono<Object> verifyForgotPasswordOtp(String email, String otpCode) {
-        return userRepository.findByEmail(email)
-                .switchIfEmpty(Mono.error(new AuthException(AuthErrorCode.AUTH_012)))
-                .flatMap(this::validateUserStatus)
-                .flatMap(user -> verifyOtpInternal(email, otpCode, OtpType.FORGOT_PASSWORD))
-                .then(createPasswordResetToken(email))
-                .map(resetToken -> (Object) new VerifyOtpResponse(resetToken));
-    }
-
-    private Mono<Void> resetPasswordWithToken(String email, String resetToken, String newPassword) {
-        return validatePasswordResetToken(email, resetToken)
-                .then(userRepository.findByEmail(email))
-                .switchIfEmpty(Mono.error(new AuthException(AuthErrorCode.AUTH_012)))
-                .flatMap(user -> updatePasswordAndInvalidateSessions(email, newPassword))
-                .then(deletePasswordResetToken(resetToken));
-    }
-
-    private Mono<Void> resetPasswordWithOtp(String email, String otpCode, String newPassword) {
-        return verifyOtpInternal(email, otpCode, OtpType.FORGOT_PASSWORD)
-                .then(userRepository.findByEmail(email))
-                .switchIfEmpty(Mono.error(new AuthException(AuthErrorCode.AUTH_012)))
-                .flatMap(user -> updatePasswordAndInvalidateSessions(email, newPassword));
+    private VerifyOtpResponse verifyForgotPasswordOtp(String email, String otpCode) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new AuthException(AuthErrorCode.AUTH_012));
+        validateUserStatus(user);
+        verifyOtpInternal(email, otpCode, OtpType.FORGOT_PASSWORD);
+        String resetToken = createPasswordResetToken(email);
+        return new VerifyOtpResponse(resetToken);
     }
 
     // ==========================================
     // Session & Token Helpers
     // ==========================================
 
-    private Mono<AuthResponse> generateAuthResponse(User user) {
+    private AuthResponse generateAuthResponse(User user) {
         String accessToken = jwtUtils.generateAccessToken(user.getEmail(), user.getId().toString(), user.getRole());
         String refreshToken = jwtUtils.generateRefreshToken(user.getEmail());
 
-        return saveSession(refreshToken, user.getId(), user.getEmail())
-                .thenReturn(new AuthResponse(accessToken, refreshToken, mapToUserResponse(user)));
+        saveSession(refreshToken, user.getId(), user.getEmail());
+        return new AuthResponse(accessToken, refreshToken, mapToUserResponse(user));
     }
 
-    private Mono<AuthResponse> rotateUserSessionAndRespond(User user) {
-        return revokeAllUserSessions(user.getEmail())
-                .then(generateAuthResponse(user));
+    private AuthResponse rotateUserSessionAndRespond(User user) {
+        revokeAllUserSessions(user.getEmail());
+        return generateAuthResponse(user);
     }
 
-    private Mono<User> authenticateUser(User user, String rawPassword) {
+    private User authenticateUser(User user, String rawPassword) {
         if (!passwordEncoder.matches(rawPassword, user.getPassword())) {
-            return Mono.error(new AuthException(AuthErrorCode.AUTH_003));
+            throw new AuthException(AuthErrorCode.AUTH_003);
         }
         return validateUserStatus(user);
     }
 
-    private Mono<User> validateUserStatus(User user) {
+    private User validateUserStatus(User user) {
         if (UserStatus.INACTIVE.name().equalsIgnoreCase(user.getStatus())) {
-            return Mono.error(new AuthException(AuthErrorCode.USER_007));
+            throw new AuthException(AuthErrorCode.USER_007);
         }
         if (UserStatus.BANNED.name().equalsIgnoreCase(user.getStatus())) {
-            return Mono.error(new AuthException(AuthErrorCode.USER_008));
+            throw new AuthException(AuthErrorCode.USER_008);
         }
-        return Mono.just(user);
+        return user;
     }
 
-    private Mono<User> validateRegistrationEligibility(User user) {
+    private User validateRegistrationEligibility(User user) {
         if (UserStatus.ACTIVE.name().equalsIgnoreCase(user.getStatus())) {
-            return Mono.error(new AuthException(AuthErrorCode.AUTH_015));
+            throw new AuthException(AuthErrorCode.AUTH_015);
         }
         if (UserStatus.BANNED.name().equalsIgnoreCase(user.getStatus())) {
-            return Mono.error(new AuthException(AuthErrorCode.USER_008));
+            throw new AuthException(AuthErrorCode.USER_008);
         }
-        return Mono.just(user);
+        return user;
     }
 
-    private Mono<User> resolveUserForTokenRefresh(String refreshToken) {
+    private User resolveUserForTokenRefresh(String refreshToken) {
         String email = jwtUtils.extractEmail(refreshToken);
-        return userRepository.findByEmail(email)
-                .switchIfEmpty(Mono.error(new AuthException(AuthErrorCode.AUTH_003)))
-                .flatMap(this::validateUserStatus);
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new AuthException(AuthErrorCode.AUTH_003));
+        return validateUserStatus(user);
     }
 
-    private Mono<User> verifyCurrentPassword(User user, String currentPassword) {
+    private void verifyCurrentPassword(User user, String currentPassword) {
         if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
-            return Mono.error(new AuthException(AuthErrorCode.AUTH_013));
+            throw new AuthException(AuthErrorCode.AUTH_013);
         }
-        return Mono.just(user);
     }
 
-    private Mono<Void> updatePasswordAndInvalidateSessions(String email, String newPassword) {
+    private void updatePasswordAndInvalidateSessions(String email, String newPassword) {
         String encodedPassword = passwordEncoder.encode(newPassword);
-        return userRepository.updatePasswordByEmail(email, encodedPassword)
-                .filter(rows -> rows > 0)
-                .switchIfEmpty(Mono.error(new AuthException(AuthErrorCode.USER_001, "Failed to update user password")))
-                .flatMap(rows -> revokeAllUserSessions(email))
-                .then();
+        int rows = userRepository.updatePasswordByEmail(email, encodedPassword);
+        if (rows <= 0) {
+            throw new AuthException(AuthErrorCode.USER_001, "Failed to update user password");
+        }
+        revokeAllUserSessions(email);
     }
 
     private UserResponse mapToUserResponse(User user) {
@@ -447,9 +432,9 @@ public class AuthServiceImpl implements AuthService {
     // Redis Session Management Logic
     // ==========================================
 
-    private Mono<Void> saveSession(String refreshToken, UUID userId, String email) {
+    private void saveSession(String refreshToken, UUID userId, String email) {
         if (refreshToken == null || userId == null || email == null) {
-            return Mono.error(new IllegalArgumentException("Session parameters must not be null"));
+            throw new IllegalArgumentException("Session parameters must not be null");
         }
 
         String tokenKey = buildTokenKey(refreshToken);
@@ -458,65 +443,67 @@ public class AuthServiceImpl implements AuthService {
 
         try {
             String jsonPayload = objectMapper.writeValueAsString(metadata);
-            return redisTemplate.opsForValue().set(tokenKey, jsonPayload, refreshTokenTtl)
-                    .then(redisTemplate.opsForSet().add(sessionKey, tokenKey))
-                    .then(redisTemplate.expire(sessionKey, refreshTokenTtl))
-                    .then();
+            redisTemplate.opsForValue().set(tokenKey, jsonPayload, refreshTokenTtl);
+            redisTemplate.opsForSet().add(sessionKey, tokenKey);
+            redisTemplate.expire(sessionKey, refreshTokenTtl);
         } catch (JsonProcessingException e) {
             log.error("Failed to serialize session metadata for user [{}]", userId, e);
-            return Mono.error(e);
+            throw new RuntimeException("Failed to serialize session metadata", e);
         }
     }
 
-    private Mono<Boolean> isValidSession(String refreshToken) {
+    private boolean isValidSession(String refreshToken) {
         if (refreshToken == null || refreshToken.isBlank()) {
-            return Mono.just(false);
+            return false;
         }
-        return redisTemplate.hasKey(buildTokenKey(refreshToken));
+        Boolean hasKey = redisTemplate.hasKey(buildTokenKey(refreshToken));
+        return Boolean.TRUE.equals(hasKey);
     }
 
-    private Mono<SessionMetadata> getSession(String refreshToken) {
+    private SessionMetadata getSession(String refreshToken) {
         if (refreshToken == null || refreshToken.isBlank()) {
-            return Mono.empty();
+            return null;
         }
-        return redisTemplate.opsForValue().get(buildTokenKey(refreshToken))
-                .flatMap(this::deserializeSessionMetadata);
+        String json = redisTemplate.opsForValue().get(buildTokenKey(refreshToken));
+        if (json == null) {
+            return null;
+        }
+        return deserializeSessionMetadata(json);
     }
 
-    private Mono<Void> revokeSession(String refreshToken) {
+    private void revokeSession(String refreshToken) {
         if (refreshToken == null || refreshToken.isBlank()) {
-            return Mono.empty();
+            return;
         }
         String tokenKey = buildTokenKey(refreshToken);
 
-        return getSession(refreshToken)
-                .flatMap(metadata -> {
-                    String sessionKey = buildUserSessionsKey(metadata.email());
-                    return redisTemplate.opsForSet().remove(sessionKey, tokenKey);
-                })
-                .then(redisTemplate.delete(tokenKey))
-                .then();
+        SessionMetadata metadata = getSession(refreshToken);
+        if (metadata != null) {
+            String sessionKey = buildUserSessionsKey(metadata.email());
+            redisTemplate.opsForSet().remove(sessionKey, tokenKey);
+        }
+        redisTemplate.delete(tokenKey);
     }
 
-    private Mono<Long> revokeAllUserSessions(String email) {
+    private long revokeAllUserSessions(String email) {
         if (email == null || email.isBlank()) {
-            return Mono.just(0L);
+            return 0L;
         }
         String sessionKey = buildUserSessionsKey(email);
         List<String> keys = List.of(sessionKey);
 
-        return redisTemplate.execute(revokeAllSessionsScript, keys)
-                .next()
-                .defaultIfEmpty(0L)
-                .doOnSuccess(count -> log.info("Revoked {} active sessions for user [{}]", count, email));
+        Long count = redisTemplate.execute(revokeAllSessionsScript, keys);
+        long result = count != null ? count : 0L;
+        log.info("Revoked {} active sessions for user [{}]", result, email);
+        return result;
     }
 
-    private Mono<SessionMetadata> deserializeSessionMetadata(String json) {
+    private SessionMetadata deserializeSessionMetadata(String json) {
         try {
-            return Mono.just(objectMapper.readValue(json, SessionMetadata.class));
+            return objectMapper.readValue(json, SessionMetadata.class);
         } catch (JsonProcessingException e) {
             log.error("Failed to deserialize session metadata from Redis: {}", e.getMessage(), e);
-            return Mono.error(new AuthException(AuthErrorCode.AUTH_005, "Corrupted session data format"));
+            throw new AuthException(AuthErrorCode.AUTH_005, "Corrupted session data format");
         }
     }
 
@@ -532,149 +519,134 @@ public class AuthServiceImpl implements AuthService {
     // Redis OTP Management Logic
     // ==========================================
 
-    private Mono<String> generateAndStoreOtp(String email, OtpType type) {
+    private String generateAndStoreOtp(String email, OtpType type) {
         if (email == null || email.isBlank()) {
-            return Mono.error(new AuthException(AuthErrorCode.AUTH_000));
+            throw new AuthException(AuthErrorCode.AUTH_000);
         }
         OtpType resolvedType = type != null ? type : OtpType.FORGOT_PASSWORD;
         String key = buildOtpKey(email, resolvedType);
-        return fetchExistingOtp(key)
-                .flatMap(this::checkCooldown)
-                .then(Mono.defer(() -> createAndSaveOtp(key, email, resolvedType)));
+        OtpData existingData = fetchExistingOtp(key);
+        if (existingData != null) {
+            checkCooldown(existingData);
+        }
+        return createAndSaveOtp(key, email, resolvedType);
     }
 
-    private Mono<Void> verifyOtpInternal(String email, String rawOtp, OtpType type) {
+    private void verifyOtpInternal(String email, String rawOtp, OtpType type) {
         if (email == null || email.isBlank() || rawOtp == null || rawOtp.isBlank()) {
-            return Mono.error(new AuthException(AuthErrorCode.AUTH_009));
+            throw new AuthException(AuthErrorCode.AUTH_009);
         }
         OtpType resolvedType = type != null ? type : OtpType.FORGOT_PASSWORD;
         String key = buildOtpKey(email, resolvedType);
-        return fetchExistingOtp(key)
-                .switchIfEmpty(Mono.error(new AuthException(AuthErrorCode.AUTH_008)))
-                .flatMap(otpData -> processOtpVerification(key, otpData, rawOtp));
+        OtpData otpData = fetchExistingOtp(key);
+        if (otpData == null) {
+            throw new AuthException(AuthErrorCode.AUTH_008);
+        }
+        processOtpVerification(key, otpData, rawOtp);
     }
 
-    private Mono<String> createPasswordResetToken(String email) {
+    private String createPasswordResetToken(String email) {
         if (email == null || email.isBlank()) {
-            return Mono.error(new AuthException(AuthErrorCode.AUTH_000));
+            throw new AuthException(AuthErrorCode.AUTH_000);
         }
         String normalizedEmail = email.trim().toLowerCase();
         String resetToken = UUID.randomUUID().toString();
         String key = KEY_PREFIX_RESET_TOKEN + resetToken;
 
-        return redisTemplate.opsForValue()
-                .set(key, normalizedEmail, RESET_TOKEN_TTL)
-                .doOnSuccess(v -> log.info("Generated reset token for user [{}]", normalizedEmail))
-                .thenReturn(resetToken);
+        redisTemplate.opsForValue().set(key, normalizedEmail, RESET_TOKEN_TTL);
+        log.info("Generated reset token for user [{}]", normalizedEmail);
+        return resetToken;
     }
 
-    private Mono<String> resolveEmailFromResetToken(String resetToken) {
+    private String resolveEmailFromResetToken(String resetToken) {
         if (resetToken == null || resetToken.isBlank()) {
-            return Mono.error(new AuthException(AuthErrorCode.AUTH_016, "Password reset token is required"));
+            throw new AuthException(AuthErrorCode.AUTH_016, "Password reset token is required");
         }
         String key = KEY_PREFIX_RESET_TOKEN + resetToken.trim();
-        return redisTemplate.opsForValue().get(key)
-                .switchIfEmpty(Mono.error(new AuthException(AuthErrorCode.AUTH_016, "Invalid or expired password reset token")));
-    }
-
-    private Mono<String> validatePasswordResetToken(String email, String resetToken) {
-        if (resetToken == null || resetToken.isBlank() || email == null || email.isBlank()) {
-            return Mono.error(new AuthException(AuthErrorCode.AUTH_016));
+        String email = redisTemplate.opsForValue().get(key);
+        if (email == null || email.isBlank()) {
+            throw new AuthException(AuthErrorCode.AUTH_016, "Invalid or expired password reset token");
         }
-        String normalizedEmail = email.trim().toLowerCase();
-        String key = KEY_PREFIX_RESET_TOKEN + resetToken.trim();
-
-        return redisTemplate.opsForValue().get(key)
-                .switchIfEmpty(Mono.error(new AuthException(AuthErrorCode.AUTH_016)))
-                .flatMap(storedEmail -> {
-                    if (!normalizedEmail.equalsIgnoreCase(storedEmail)) {
-                        log.warn("Reset token email mismatch: expected [{}], found [{}]",
-                                normalizedEmail, storedEmail);
-                        return Mono.error(new AuthException(AuthErrorCode.AUTH_016));
-                    }
-                    return Mono.just(storedEmail);
-                });
+        return email;
     }
 
-    private Mono<Void> deletePasswordResetToken(String resetToken) {
+    private void deletePasswordResetToken(String resetToken) {
         if (resetToken == null || resetToken.isBlank()) {
-            return Mono.empty();
+            return;
         }
-        return redisTemplate.delete(KEY_PREFIX_RESET_TOKEN + resetToken.trim()).then();
+        redisTemplate.delete(KEY_PREFIX_RESET_TOKEN + resetToken.trim());
     }
 
-    private Mono<Void> checkCooldown(OtpData existingData) {
+    private void checkCooldown(OtpData existingData) {
         long elapsed = System.currentTimeMillis() - existingData.createdAt();
         if (elapsed < cooldownMillis) {
-            return Mono.error(new AuthException(AuthErrorCode.AUTH_007));
+            throw new AuthException(AuthErrorCode.AUTH_007);
         }
-        return Mono.empty();
     }
 
-    private Mono<String> createAndSaveOtp(String key, String email, OtpType type) {
+    private String createAndSaveOtp(String key, String email, OtpType type) {
         String rawOtp = generateNumericOtp(otpLength);
         String hashedOtp = passwordEncoder.encode(rawOtp);
         OtpData otpData = new OtpData(hashedOtp, 0, System.currentTimeMillis());
 
         try {
             String json = objectMapper.writeValueAsString(otpData);
-            return redisTemplate.opsForValue().set(key, json, otpExpirationDuration)
-                    .doOnSuccess(v -> log.info("Generated {} OTP for user [{}]", type, email))
-                    .thenReturn(rawOtp);
+            redisTemplate.opsForValue().set(key, json, otpExpirationDuration);
+            log.info("Generated {} OTP for user [{}]", type, email);
+            return rawOtp;
         } catch (JsonProcessingException e) {
             log.error("Failed to serialize OTP data for [{}]: {}", email, e.getMessage(), e);
-            return Mono.error(new AuthException(AuthErrorCode.AUTH_011));
+            throw new AuthException(AuthErrorCode.AUTH_011);
         }
     }
 
-    private Mono<Void> processOtpVerification(String key, OtpData otpData, String rawOtp) {
+    private void processOtpVerification(String key, OtpData otpData, String rawOtp) {
         if (otpData.attempts() >= maxAttempts) {
-            return redisTemplate.delete(key)
-                    .then(Mono.error(new AuthException(AuthErrorCode.AUTH_010)));
+            redisTemplate.delete(key);
+            throw new AuthException(AuthErrorCode.AUTH_010);
         }
 
         boolean matches = passwordEncoder.matches(rawOtp, otpData.otpCode());
         if (!matches) {
             int newAttempts = otpData.attempts() + 1;
             if (newAttempts >= maxAttempts) {
-                return redisTemplate.delete(key)
-                        .then(Mono.error(new AuthException(AuthErrorCode.AUTH_010)));
+                redisTemplate.delete(key);
+                throw new AuthException(AuthErrorCode.AUTH_010);
             }
-            return updateAttempts(key, otpData, newAttempts)
-                    .then(Mono.error(new AuthException(AuthErrorCode.AUTH_009,
-                            "Invalid OTP code. " + (maxAttempts - newAttempts) + " attempts remaining.")));
+            updateAttempts(key, otpData, newAttempts);
+            throw new AuthException(AuthErrorCode.AUTH_009,
+                    "Invalid OTP code. " + (maxAttempts - newAttempts) + " attempts remaining.");
         }
 
-        return redisTemplate.delete(key).then();
+        redisTemplate.delete(key);
     }
 
-    private Mono<Void> updateAttempts(String key, OtpData otpData, int newAttempts) {
+    private void updateAttempts(String key, OtpData otpData, int newAttempts) {
         OtpData updated = new OtpData(otpData.otpCode(), newAttempts, otpData.createdAt());
         try {
             String json = objectMapper.writeValueAsString(updated);
-            return redisTemplate.getExpire(key)
-                    .defaultIfEmpty(otpExpirationDuration)
-                    .flatMap(ttl -> {
-                        Duration safeTtl = (ttl != null && !ttl.isNegative() && !ttl.isZero()) ? ttl : otpExpirationDuration;
-                        return redisTemplate.opsForValue().set(key, json, safeTtl);
-                    })
-                    .then();
+            Long expireSeconds = redisTemplate.getExpire(key);
+            Duration safeTtl = (expireSeconds != null && expireSeconds > 0)
+                    ? Duration.ofSeconds(expireSeconds)
+                    : otpExpirationDuration;
+            redisTemplate.opsForValue().set(key, json, safeTtl);
         } catch (JsonProcessingException e) {
             log.error("Failed to update OTP attempt count in Redis: {}", e.getMessage(), e);
-            return Mono.error(new AuthException(AuthErrorCode.AUTH_011, "Failed to update OTP attempts state"));
+            throw new AuthException(AuthErrorCode.AUTH_011, "Failed to update OTP attempts state");
         }
     }
 
-    private Mono<OtpData> fetchExistingOtp(String key) {
-        return redisTemplate.opsForValue().get(key)
-                .flatMap(json -> {
-                    try {
-                        return Mono.just(objectMapper.readValue(json, OtpData.class));
-                    } catch (JsonProcessingException e) {
-                        log.error("Failed to deserialize OTP data from Redis for key [{}]: {}", key, e.getMessage(), e);
-                        return Mono.error(new AuthException(AuthErrorCode.AUTH_011, "Corrupted OTP data format"));
-                    }
-                });
+    private OtpData fetchExistingOtp(String key) {
+        String json = redisTemplate.opsForValue().get(key);
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(json, OtpData.class);
+        } catch (JsonProcessingException e) {
+            log.error("Failed to deserialize OTP data from Redis for key [{}]: {}", key, e.getMessage(), e);
+            throw new AuthException(AuthErrorCode.AUTH_011, "Corrupted OTP data format");
+        }
     }
 
     private String generateNumericOtp(int length) {
