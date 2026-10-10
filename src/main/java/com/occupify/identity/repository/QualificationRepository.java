@@ -9,5 +9,5 @@ import java.util.UUID;
 
 @Repository
 public interface QualificationRepository extends JpaRepository<Qualification, UUID> {
-    List<Qualification> findByUserIdOrderByYearDesc(UUID userId);
+    List<Qualification> findByUserIdOrderByIssueDateDesc(UUID userId);
 }
