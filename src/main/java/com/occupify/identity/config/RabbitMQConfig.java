@@ -15,7 +15,7 @@ import org.springframework.context.annotation.Configuration;
 public class RabbitMQConfig {
 
     @Value("${app.rabbitmq.exchange:occupify.notification.exchange}")
-    private String exchangeName;
+    private String exchangeName = "occupify.notification.exchange";
 
     @Bean
     public TopicExchange notificationExchange() {

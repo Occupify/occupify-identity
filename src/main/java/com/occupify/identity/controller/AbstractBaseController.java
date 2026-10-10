@@ -5,7 +5,6 @@ import com.occupify.identity.dto.base.ErrorResponse;
 import com.occupify.identity.dto.base.PageResponse;
 import com.occupify.identity.dto.base.SingleResponse;
 import com.occupify.identity.dto.base.SuccessResponse;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
@@ -13,8 +12,7 @@ import java.util.List;
 
 public abstract class AbstractBaseController {
 
-    @Autowired(required = false)
-    protected ResponseFactory responseFactory = new ResponseFactory();
+    protected final ResponseFactory responseFactory = new ResponseFactory();
 
     protected <T> SingleResponse<T> successSingle(T data, String message) {
         return responseFactory.createSingleResponse(HttpStatus.OK, message, data);
@@ -28,7 +26,8 @@ public abstract class AbstractBaseController {
         return responseFactory.createCreatedResponse(HttpStatus.CREATED, message, data);
     }
 
-    protected <T> PageResponse<T> paging(List<T> data, int page, int size, long totalElements, int totalPages, String message) {
+    protected <T> PageResponse<T> paging(List<T> data, int page, int size, long totalElements, int totalPages,
+            String message) {
         return responseFactory.createPageResponse(HttpStatus.OK, message, data, page, size, totalElements, totalPages);
     }
 
