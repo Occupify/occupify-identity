@@ -39,3 +39,9 @@ build/
 .env
 !.env.example
 
+### AI & Agent Configurations ###
+.agents/
+AGENTS.md
+GEMINI.md
+.gemini/
+
