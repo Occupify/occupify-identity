@@ -123,7 +123,7 @@ class AuthServiceImplTest {
     void shouldRegisterNewUserSuccessfully() {
         RegisterRequest request = new RegisterRequest("newuser@occupify.com", "Password123!");
         UUID userId = UUID.randomUUID();
-        User savedUser = new User(userId, "newuser@occupify.com", "encoded-pass", UserRole.USER.name(),
+        User savedUser = new User(userId, "newuser@occupify.com", "encoded-pass", UserRole.EMPLOYEE.name(),
                 UserStatus.INACTIVE.name(), Instant.now(), Instant.now());
 
         when(userRepository.findByEmail("newuser@occupify.com")).thenReturn(Optional.empty());
