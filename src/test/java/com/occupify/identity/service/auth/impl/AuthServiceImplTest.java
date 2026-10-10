@@ -18,8 +18,6 @@ import com.occupify.identity.enums.UserStatus;
 import com.occupify.identity.exception.auth.AuthErrorCode;
 import com.occupify.identity.exception.auth.AuthException;
 import com.occupify.identity.repository.UserRepository;
-import com.occupify.identity.event.PasswordResetRequestedEvent;
-import com.occupify.identity.event.UserRegisteredEvent;
 import com.occupify.identity.producer.UserEventProducer;
 import com.occupify.identity.security.JwtUtils;
 import com.occupify.identity.security.impl.JwtUtilsImpl;
@@ -137,7 +135,8 @@ class AuthServiceImplTest {
         assertEquals(userId, response.id());
         assertEquals("newuser@occupify.com", response.email());
         assertEquals("INACTIVE", response.status());
-        verify(userEventProducer).publishUserRegistered(argThat(event -> event.userId().equals(userId) && event.email().equals("newuser@occupify.com")));
+        verify(userEventProducer).publishUserRegistered(
+                argThat(event -> event.userId().equals(userId) && event.email().equals("newuser@occupify.com")));
     }
 
     @Test
@@ -170,7 +169,8 @@ class AuthServiceImplTest {
         assertEquals(userId, response.id());
         assertEquals("INACTIVE", response.status());
         verify(userRepository).save(inactiveUser);
-        verify(userEventProducer).publishUserRegistered(argThat(event -> event.userId().equals(userId) && event.email().equals("inactive@occupify.com")));
+        verify(userEventProducer).publishUserRegistered(
+                argThat(event -> event.userId().equals(userId) && event.email().equals("inactive@occupify.com")));
     }
 
     @Test
@@ -183,7 +183,8 @@ class AuthServiceImplTest {
         mockRedisOtpGeneration("otp:register:inactive@occupify.com");
 
         assertDoesNotThrow(() -> authService.resendOtp(request));
-        verify(userEventProducer).publishUserRegistered(argThat(event -> event.email().equals("inactive@occupify.com")));
+        verify(userEventProducer)
+                .publishUserRegistered(argThat(event -> event.email().equals("inactive@occupify.com")));
     }
 
     @Test
@@ -196,7 +197,8 @@ class AuthServiceImplTest {
         mockRedisOtpGeneration("otp:forgot_password:active@occupify.com");
 
         assertDoesNotThrow(() -> authService.resendOtp(request));
-        verify(userEventProducer).publishPasswordResetRequested(argThat(event -> event.email().equals("active@occupify.com")));
+        verify(userEventProducer)
+                .publishPasswordResetRequested(argThat(event -> event.email().equals("active@occupify.com")));
     }
 
     @Test
@@ -209,7 +211,8 @@ class AuthServiceImplTest {
         mockRedisOtpGeneration("otp:forgot_password:active@occupify.com");
 
         assertDoesNotThrow(() -> authService.forgotPassword(request));
-        verify(userEventProducer).publishPasswordResetRequested(argThat(event -> event.email().equals("active@occupify.com")));
+        verify(userEventProducer)
+                .publishPasswordResetRequested(argThat(event -> event.email().equals("active@occupify.com")));
     }
 
     @Test
@@ -242,7 +245,8 @@ class AuthServiceImplTest {
 
         when(userRepository.findByEmail("user@occupify.com")).thenReturn(Optional.of(user));
         mockRedisOtpVerification("otp:forgot_password:user@occupify.com", "123456", "$2a$10$hashed");
-        doNothing().when(valueOperations).set(startsWith("password_reset_token:"), eq("user@occupify.com"), any(Duration.class));
+        doNothing().when(valueOperations).set(startsWith("password_reset_token:"), eq("user@occupify.com"),
+                any(Duration.class));
 
         Object result = authService.verifyOtp(request);
 
@@ -381,7 +385,8 @@ class AuthServiceImplTest {
 
     @Test
     void shouldResetPasswordSuccessfullyWithResetToken() {
-        ResetPasswordRequest request = new ResetPasswordRequest("NewPassword789!", "NewPassword789!", "valid-reset-token");
+        ResetPasswordRequest request = new ResetPasswordRequest("NewPassword789!", "NewPassword789!",
+                "valid-reset-token");
         User user = new User(UUID.randomUUID(), "user@occupify.com", "old-pass", "USER", "ACTIVE",
                 Instant.now(), Instant.now());
 
@@ -403,9 +408,11 @@ class AuthServiceImplTest {
 
     @Test
     void shouldFailResetPasswordWhenConfirmPasswordIsDifferent() {
-        ResetPasswordRequest request = new ResetPasswordRequest("NewPassword789!", "DifferentPassword123!", "valid-reset-token");
+        ResetPasswordRequest request = new ResetPasswordRequest("NewPassword789!", "DifferentPassword123!",
+                "valid-reset-token");
 
-        AuthException ex = assertThrows(AuthException.class, () -> authService.resetPassword("valid-reset-token", request));
+        AuthException ex = assertThrows(AuthException.class,
+                () -> authService.resetPassword("valid-reset-token", request));
         assertEquals(AuthErrorCode.AUTH_017, ex.getErrorCode());
         assertTrue(ex.getMessage().contains("Confirm password is different"));
     }
@@ -455,7 +462,8 @@ class AuthServiceImplTest {
         when(userRepository.findByEmail("user@occupify.com")).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("WrongPass!", "hashed-current-pass")).thenReturn(false);
 
-        AuthException ex = assertThrows(AuthException.class, () -> authService.changePassword("user@occupify.com", request));
+        AuthException ex = assertThrows(AuthException.class,
+                () -> authService.changePassword("user@occupify.com", request));
         assertEquals(AuthErrorCode.AUTH_013, ex.getErrorCode());
     }
 
@@ -471,7 +479,8 @@ class AuthServiceImplTest {
         when(userRepository.updatePasswordByEmail("user@occupify.com", "hashed-new-pass"))
                 .thenReturn(0);
 
-        AuthException ex = assertThrows(AuthException.class, () -> authService.changePassword("user@occupify.com", request));
+        AuthException ex = assertThrows(AuthException.class,
+                () -> authService.changePassword("user@occupify.com", request));
         assertEquals(AuthErrorCode.USER_001, ex.getErrorCode());
         verify(redisTemplate, never()).execute(eq(revokeAllSessionsScript), anyList());
     }
