@@ -39,6 +39,15 @@ public class Education {
     @Column(name = "field_of_study", nullable = false, length = 150)
     private String fieldOfStudy;
 
+    @Column(name = "degree", length = 150)
+    private String degree;
+
+    @Column(name = "grade", length = 50)
+    private String grade;
+
+    @Column(name = "description", columnDefinition = "TEXT")
+    private String description;
+
     @Column(name = "start_date", nullable = false)
     private LocalDate startDate;
 
@@ -51,11 +60,16 @@ public class Education {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    public Education(UUID id, User user, String institution, String fieldOfStudy, LocalDate startDate, LocalDate endDate) {
+    public Education(UUID id, User user, String institution, String fieldOfStudy,
+                     String degree, String grade, String description,
+                     LocalDate startDate, LocalDate endDate) {
         this.id = id != null ? id : UUID.randomUUID();
         this.user = user;
         this.institution = institution;
         this.fieldOfStudy = fieldOfStudy;
+        this.degree = degree;
+        this.grade = grade;
+        this.description = description;
         this.startDate = startDate;
         this.endDate = endDate;
         this.createdAt = Instant.now();

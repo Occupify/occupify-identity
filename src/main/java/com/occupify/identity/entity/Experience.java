@@ -36,8 +36,17 @@ public class Experience {
     @Column(name = "title", nullable = false, length = 150)
     private String title;
 
+    @Column(name = "organization", nullable = false, length = 200)
+    private String organization;
+
+    @Column(name = "employment_type", length = 50)
+    private String employmentType;
+
     @Column(name = "location", length = 150)
     private String location;
+
+    @Column(name = "location_type", length = 30)
+    private String locationType;
 
     @Column(name = "start_date", nullable = false)
     private LocalDate startDate;
@@ -57,11 +66,16 @@ public class Experience {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    public Experience(UUID id, User user, String title, String location, LocalDate startDate, LocalDate endDate, boolean isCurrent, String description) {
+    public Experience(UUID id, User user, String title, String organization, String employmentType,
+                      String location, String locationType, LocalDate startDate, LocalDate endDate,
+                      boolean isCurrent, String description) {
         this.id = id != null ? id : UUID.randomUUID();
         this.user = user;
         this.title = title;
+        this.organization = organization;
+        this.employmentType = employmentType;
         this.location = location;
+        this.locationType = locationType;
         this.startDate = startDate;
         this.endDate = endDate;
         this.isCurrent = isCurrent;

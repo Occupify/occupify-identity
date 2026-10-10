@@ -1,5 +1,6 @@
 package com.occupify.identity.entity;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -33,10 +34,28 @@ public class SkillUser {
     @JoinColumn(name = "skill_id", nullable = false)
     private Skill skill;
 
+    @Column(name = "is_top_skill", nullable = false)
+    private boolean isTopSkill = false;
+
+    @Column(name = "proficiency_level", length = 30)
+    private String proficiencyLevel;
+
+    @Column(name = "years_of_experience")
+    private Integer yearsOfExperience;
+
     public SkillUser(User user, Skill skill) {
         this.user = user;
         this.skill = skill;
         this.id = new SkillUserId(user.getId(), skill.getId());
+    }
+
+    public SkillUser(User user, Skill skill, boolean isTopSkill, String proficiencyLevel, Integer yearsOfExperience) {
+        this.user = user;
+        this.skill = skill;
+        this.id = new SkillUserId(user.getId(), skill.getId());
+        this.isTopSkill = isTopSkill;
+        this.proficiencyLevel = proficiencyLevel;
+        this.yearsOfExperience = yearsOfExperience;
     }
 
     @Override

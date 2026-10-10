@@ -14,6 +14,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -38,8 +39,17 @@ public class Qualification {
     @Column(name = "organization", nullable = false, length = 200)
     private String organization;
 
-    @Column(name = "\"year\"", nullable = false)
-    private Integer year;
+    @Column(name = "issue_date", nullable = false)
+    private LocalDate issueDate;
+
+    @Column(name = "expiration_date")
+    private LocalDate expirationDate;
+
+    @Column(name = "credential_id", length = 100)
+    private String credentialId;
+
+    @Column(name = "credential_url", length = 500)
+    private String credentialUrl;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -47,12 +57,17 @@ public class Qualification {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    public Qualification(UUID id, User user, String title, String organization, Integer year) {
+    public Qualification(UUID id, User user, String title, String organization,
+                         LocalDate issueDate, LocalDate expirationDate,
+                         String credentialId, String credentialUrl) {
         this.id = id != null ? id : UUID.randomUUID();
         this.user = user;
         this.title = title;
         this.organization = organization;
-        this.year = year;
+        this.issueDate = issueDate;
+        this.expirationDate = expirationDate;
+        this.credentialId = credentialId;
+        this.credentialUrl = credentialUrl;
         this.createdAt = Instant.now();
         this.updatedAt = Instant.now();
     }
