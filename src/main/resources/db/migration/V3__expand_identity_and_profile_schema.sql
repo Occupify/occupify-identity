@@ -1,5 +1,5 @@
 -- =========================================================================
--- V3: Expand Identity & Profile Schema
+-- V3: Expand Identity & Profile Schema (Standardized with Profile Survey)
 -- Experiences, Educations, Qualifications, Skills, SkillsUsers, Contracts, Reviews
 -- =========================================================================
 
@@ -39,7 +39,10 @@ CREATE TABLE IF NOT EXISTS experiences (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     title VARCHAR(150) NOT NULL,
+    organization VARCHAR(200) NOT NULL,
+    employment_type VARCHAR(50),
     location VARCHAR(150),
+    location_type VARCHAR(30),
     start_date DATE NOT NULL,
     end_date DATE,
     is_current BOOLEAN NOT NULL DEFAULT FALSE,
@@ -55,6 +58,9 @@ CREATE TABLE IF NOT EXISTS educations (
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     institution VARCHAR(200) NOT NULL,
     field_of_study VARCHAR(150) NOT NULL,
+    degree VARCHAR(150),
+    grade VARCHAR(50),
+    description TEXT,
     start_date DATE NOT NULL,
     end_date DATE,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -68,7 +74,10 @@ CREATE TABLE IF NOT EXISTS qualifications (
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     title VARCHAR(200) NOT NULL,
     organization VARCHAR(200) NOT NULL,
-    "year" INTEGER NOT NULL,
+    issue_date DATE NOT NULL,
+    expiration_date DATE,
+    credential_id VARCHAR(100),
+    credential_url VARCHAR(500),
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -84,10 +93,13 @@ CREATE TABLE IF NOT EXISTS skills (
 CREATE INDEX IF NOT EXISTS idx_skills_name ON skills(name);
 CREATE INDEX IF NOT EXISTS idx_skills_category ON skills(category);
 
--- 6. BẢNG TRUNG GIAN SKILLS_USERS (Quan hệ N-N chuẩn hóa với Composite PK)
+-- 6. BẢNG TRUNG GIAN SKILLS_USERS (Quan hệ N-N chuẩn hóa với Composite PK & chi tiết trình độ)
 CREATE TABLE IF NOT EXISTS skills_users (
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     skill_id UUID NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
+    is_top_skill BOOLEAN NOT NULL DEFAULT FALSE,
+    proficiency_level VARCHAR(30) DEFAULT 'INTERMEDIATE',
+    years_of_experience INTEGER,
     PRIMARY KEY (user_id, skill_id)
 );
 CREATE INDEX IF NOT EXISTS idx_skills_users_skill_id ON skills_users(skill_id);
