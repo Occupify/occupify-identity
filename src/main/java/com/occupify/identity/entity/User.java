@@ -2,48 +2,51 @@ package com.occupify.identity.entity;
 
 import com.occupify.identity.enums.UserRole;
 import com.occupify.identity.enums.UserStatus;
-import org.springframework.data.annotation.Id;
-import org.springframework.data.annotation.Transient;
-import org.springframework.data.domain.Persistable;
-import org.springframework.data.relational.core.mapping.Column;
-import org.springframework.data.relational.core.mapping.Table;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 
-@Table("users")
-public class User implements Persistable<UUID> {
+@Entity
+@Table(name = "users")
+@Getter
+@Setter
+@NoArgsConstructor
+public class User {
 
     @Id
+    @Column(name = "id", nullable = false, updatable = false)
     private UUID id;
 
-    @Column("email")
+    @Column(name = "email", nullable = false, unique = true, length = 255)
     private String email;
 
-    @Column("password")
+    @Column(name = "password", nullable = false, length = 255)
     private String password;
 
-    @Column("role")
+    @Column(name = "role", nullable = false, length = 50)
     private String role;
 
-    @Column("status")
+    @Column(name = "status", nullable = false, length = 50)
     private String status;
 
-    @Column("created_at")
+    @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
-    @Column("updated_at")
+    @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    @Transient
-    private boolean isNewEntity = false;
-
-    public User() {
-    }
-
     public User(UUID id, String email, String password, String role, String status, Instant createdAt, Instant updatedAt) {
-        this.id = id;
+        this.id = id != null ? id : UUID.randomUUID();
         this.email = email;
         this.password = password;
         this.role = role != null ? role : UserRole.USER.name();
@@ -52,12 +55,36 @@ public class User implements Persistable<UUID> {
         this.updatedAt = updatedAt != null ? updatedAt : Instant.now();
     }
 
+    @PrePersist
+    protected void onCreate() {
+        if (id == null) {
+            id = UUID.randomUUID();
+        }
+        if (createdAt == null) {
+            createdAt = Instant.now();
+        }
+        if (updatedAt == null) {
+            updatedAt = Instant.now();
+        }
+        if (role == null) {
+            role = UserRole.USER.name();
+        }
+        if (status == null) {
+            status = UserStatus.ACTIVE.name();
+        }
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        this.updatedAt = Instant.now();
+    }
+
     public static User createNew(String email, String encodedPassword) {
         return createWithRole(email, encodedPassword, UserRole.USER.name());
     }
 
     public static User createInactive(String email, String encodedPassword) {
-        User user = new User(
+        return new User(
                 UUID.randomUUID(),
                 email,
                 encodedPassword,
@@ -66,12 +93,10 @@ public class User implements Persistable<UUID> {
                 Instant.now(),
                 Instant.now()
         );
-        user.isNewEntity = true;
-        return user;
     }
 
     public static User createWithRole(String email, String encodedPassword, String role) {
-        User user = new User(
+        return new User(
                 UUID.randomUUID(),
                 email,
                 encodedPassword,
@@ -80,75 +105,6 @@ public class User implements Persistable<UUID> {
                 Instant.now(),
                 Instant.now()
         );
-        user.isNewEntity = true;
-        return user;
-    }
-
-    @Override
-    public UUID getId() {
-        return id;
-    }
-
-    public void setId(UUID id) {
-        this.id = id;
-    }
-
-    @Override
-    public boolean isNew() {
-        return this.isNewEntity || this.id == null;
-    }
-
-    public void markAsExisting() {
-        this.isNewEntity = false;
-    }
-
-    public String getEmail() {
-        return email;
-    }
-
-    public void setEmail(String email) {
-        this.email = email;
-    }
-
-    public String getPassword() {
-        return password;
-    }
-
-    public void setPassword(String password) {
-        this.password = password;
-        this.updatedAt = Instant.now();
-    }
-
-    public String getRole() {
-        return role;
-    }
-
-    public void setRole(String role) {
-        this.role = role;
-    }
-
-    public String getStatus() {
-        return status;
-    }
-
-    public void setStatus(String status) {
-        this.status = status;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(Instant createdAt) {
-        this.createdAt = createdAt;
-    }
-
-    public Instant getUpdatedAt() {
-        return updatedAt;
-    }
-
-    public void setUpdatedAt(Instant updatedAt) {
-        this.updatedAt = updatedAt;
     }
 
     @Override

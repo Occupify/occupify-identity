@@ -1,14 +1,13 @@
 package com.occupify.identity.filter;
 
+import jakarta.servlet.ServletException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
-import org.springframework.mock.web.server.MockServerWebExchange;
-import org.springframework.web.server.WebFilterChain;
-import reactor.core.publisher.Mono;
+import org.springframework.mock.web.MockFilterChain;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
 
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
+import java.io.IOException;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -22,73 +21,51 @@ class CorrelationIdFilterTest {
     }
 
     @Test
-    void shouldGenerateCorrelationIdWhenMissing() {
-        MockServerHttpRequest request = MockServerHttpRequest.get("/projects").build();
-        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+    void shouldGenerateCorrelationIdWhenMissing() throws ServletException, IOException {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/auth/login");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        MockFilterChain chain = new MockFilterChain();
 
-        AtomicBoolean chainCalled = new AtomicBoolean(false);
-        AtomicReference<String> downstreamHeader = new AtomicReference<>();
-        WebFilterChain chain = ex -> {
-            chainCalled.set(true);
-            downstreamHeader.set(ex.getRequest().getHeaders().getFirst(CorrelationIdFilter.CORRELATION_ID_HEADER));
-            return Mono.empty();
-        };
+        filter.doFilter(request, response, chain);
 
-        filter.filter(exchange, chain).block();
-
-        assertTrue(chainCalled.get());
-        String correlationIdAttr = exchange.getAttribute(CorrelationIdFilter.CORRELATION_ID_ATTRIBUTE);
+        Object correlationIdAttr = request.getAttribute(CorrelationIdFilter.CORRELATION_ID_ATTRIBUTE);
         assertNotNull(correlationIdAttr, "Correlation ID attribute should be set");
-        assertFalse(correlationIdAttr.isBlank(), "Correlation ID should not be blank");
-        assertEquals(correlationIdAttr, downstreamHeader.get(), "Downstream request should receive correlation ID header");
-        assertEquals(correlationIdAttr, exchange.getResponse().getHeaders().getFirst(CorrelationIdFilter.CORRELATION_ID_HEADER), "Response should include correlation ID header");
+        assertFalse(correlationIdAttr.toString().isBlank(), "Correlation ID should not be blank");
+        assertEquals(correlationIdAttr.toString(), response.getHeader(CorrelationIdFilter.CORRELATION_ID_HEADER),
+                "Response should include correlation ID header");
     }
 
     @Test
-    void shouldPreserveExistingCorrelationId() {
+    void shouldPreserveExistingCorrelationId() throws ServletException, IOException {
         String existingId = "client-correlation-12345";
-        MockServerHttpRequest request = MockServerHttpRequest.get("/projects")
-                .header(CorrelationIdFilter.CORRELATION_ID_HEADER, existingId)
-                .build();
-        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/auth/login");
+        request.addHeader(CorrelationIdFilter.CORRELATION_ID_HEADER, existingId);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        MockFilterChain chain = new MockFilterChain();
 
-        AtomicBoolean chainCalled = new AtomicBoolean(false);
-        AtomicReference<String> downstreamHeader = new AtomicReference<>();
-        WebFilterChain chain = ex -> {
-            chainCalled.set(true);
-            downstreamHeader.set(ex.getRequest().getHeaders().getFirst(CorrelationIdFilter.CORRELATION_ID_HEADER));
-            return Mono.empty();
-        };
+        filter.doFilter(request, response, chain);
 
-        filter.filter(exchange, chain).block();
-
-        assertTrue(chainCalled.get());
-        assertEquals(existingId, exchange.getAttribute(CorrelationIdFilter.CORRELATION_ID_ATTRIBUTE));
-        assertEquals(existingId, downstreamHeader.get());
-        assertEquals(existingId, exchange.getResponse().getHeaders().getFirst(CorrelationIdFilter.CORRELATION_ID_HEADER));
+        assertEquals(existingId, request.getAttribute(CorrelationIdFilter.CORRELATION_ID_ATTRIBUTE));
+        assertEquals(existingId, response.getHeader(CorrelationIdFilter.CORRELATION_ID_HEADER));
     }
 
     @Test
     void shouldResolveCorrelationIdFromAttributeOrHeader() {
-        // Null exchange
+        // Null request
         assertEquals(CorrelationIdFilter.UNKNOWN_CORRELATION_ID, CorrelationIdFilter.resolveCorrelationId(null));
 
-        // Exchange with attribute
-        MockServerHttpRequest req1 = MockServerHttpRequest.get("/").build();
-        MockServerWebExchange ex1 = MockServerWebExchange.from(req1);
-        ex1.getAttributes().put(CorrelationIdFilter.CORRELATION_ID_ATTRIBUTE, "attr-corr-id");
-        assertEquals("attr-corr-id", CorrelationIdFilter.resolveCorrelationId(ex1));
+        // Request with attribute
+        MockHttpServletRequest req1 = new MockHttpServletRequest();
+        req1.setAttribute(CorrelationIdFilter.CORRELATION_ID_ATTRIBUTE, "attr-corr-id");
+        assertEquals("attr-corr-id", CorrelationIdFilter.resolveCorrelationId(req1));
 
-        // Exchange with header only
-        MockServerHttpRequest req2 = MockServerHttpRequest.get("/")
-                .header(CorrelationIdFilter.CORRELATION_ID_HEADER, "header-corr-id")
-                .build();
-        MockServerWebExchange ex2 = MockServerWebExchange.from(req2);
-        assertEquals("header-corr-id", CorrelationIdFilter.resolveCorrelationId(ex2));
+        // Request with header only
+        MockHttpServletRequest req2 = new MockHttpServletRequest();
+        req2.addHeader(CorrelationIdFilter.CORRELATION_ID_HEADER, "header-corr-id");
+        assertEquals("header-corr-id", CorrelationIdFilter.resolveCorrelationId(req2));
 
-        // Exchange with neither
-        MockServerHttpRequest req3 = MockServerHttpRequest.get("/").build();
-        MockServerWebExchange ex3 = MockServerWebExchange.from(req3);
-        assertEquals(CorrelationIdFilter.UNKNOWN_CORRELATION_ID, CorrelationIdFilter.resolveCorrelationId(ex3));
+        // Request with neither
+        MockHttpServletRequest req3 = new MockHttpServletRequest();
+        assertEquals(CorrelationIdFilter.UNKNOWN_CORRELATION_ID, CorrelationIdFilter.resolveCorrelationId(req3));
     }
 }

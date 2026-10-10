@@ -9,25 +9,24 @@ import com.occupify.identity.dto.request.auth.SendOtpRequest;
 import com.occupify.identity.dto.request.auth.VerifyOtpRequest;
 import com.occupify.identity.dto.response.auth.AuthResponse;
 import com.occupify.identity.dto.response.auth.UserResponse;
-import reactor.core.publisher.Mono;
 
 public interface AuthService {
 
-    Mono<UserResponse> register(RegisterRequest request);
+    UserResponse register(RegisterRequest request);
 
-    Mono<AuthResponse> login(LoginRequest request);
+    AuthResponse login(LoginRequest request);
 
-    Mono<AuthResponse> refreshToken(String refreshToken);
+    AuthResponse refreshToken(String refreshToken);
 
-    Mono<Void> signOut(String refreshToken);
+    void signOut(String refreshToken);
 
-    Mono<Void> resendOtp(SendOtpRequest request);
+    void resendOtp(SendOtpRequest request);
 
-    Mono<Object> verifyOtp(VerifyOtpRequest request);
+    Object verifyOtp(VerifyOtpRequest request);
 
-    Mono<Void> forgotPassword(ForgotPasswordRequest request);
+    void forgotPassword(ForgotPasswordRequest request);
 
-    Mono<Void> resetPassword(String resetToken, ResetPasswordRequest request);
+    void resetPassword(String resetToken, ResetPasswordRequest request);
 
-    Mono<Void> changePassword(String userEmail, ChangePasswordRequest request);
+    void changePassword(String userEmail, ChangePasswordRequest request);
 }

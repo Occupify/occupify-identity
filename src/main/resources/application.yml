@@ -3,19 +3,27 @@ server:
 
 spring:
   application:
-    name: occupify-identity-gateway
+    name: occupify-identity
   config:
     import: optional:file:.env[.properties]
-  
-  # --- R2DBC Reactive PostgreSQL Configuration ---
-  r2dbc:
-    url: r2dbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5530}/${POSTGRES_DB:occupify_identity}
+
+  # --- PostgreSQL DataSource Configuration (JDBC) ---
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5530}/${POSTGRES_DB:occupify_identity}
     username: ${POSTGRES_USER:postgres}
     password: ${POSTGRES_PASSWORD:postgres}
-    pool:
-      enabled: true
-      initial-size: 5
-      max-size: 20
+    driver-class-name: org.postgresql.Driver
+
+  # --- Spring Data JPA / Hibernate Configuration ---
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
   # --- Flyway Database Migration Configuration ---
   flyway:
     enabled: true
@@ -25,67 +33,20 @@ spring:
     locations: classpath:db/migration
     baseline-on-migrate: true
     out-of-order: true
-  # --- Reactive Redis Configuration ---
+
+  # --- Redis Configuration ---
   data:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
       timeout: 2000ms
 
-  # --- RabbitMQ Message Broker Configuration ---
+  # --- RabbitMQ Configuration ---
   rabbitmq:
     host: ${RABBITMQ_HOST:localhost}
     port: ${RABBITMQ_PORT:5672}
     username: ${RABBITMQ_USER:guest}
     password: ${RABBITMQ_PASSWORD:guest}
-  
-  cloud:
-    gateway:
-      routes:
-        # Core Marketplace Service (:8182)
-        - id: core-service
-          uri: ${SERVICES_CORE_URL:http://localhost:8182}
-          predicates:
-            - Path=/projects/**, /applications/**, /reviews/**, /bids/**
-
-        # Payment Service (:8183)
-        - id: payment-service
-          uri: ${SERVICES_PAYMENT_URL:http://localhost:8183}
-          predicates:
-            - Path=/contracts/**, /wallets/**, /payments/**
-
-        # Notification Service (:8184)
-        - id: notification-service
-          uri: ${SERVICES_NOTIFICATION_URL:http://localhost:8184}
-          predicates:
-            - Path=/notifications/**
-
-        # Administration Service (:8185)
-        - id: administration-service
-          uri: ${SERVICES_ADMINISTRATION_URL:http://localhost:8185}
-          predicates:
-            - Path=/admin/**, /audit-logs/**, /reports/**
-
-        # Identity / Auth routes
-        - id: auth-service
-          uri: ${SERVICES_AUTH_URL:http://localhost:8181}
-          predicates:
-            - Path=/auth/**, /account/**
-
-      globalcors:
-        cors-configurations:
-          '[/**]':
-            allowedOrigins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
-            allowedMethods:
-              - GET
-              - POST
-              - PUT
-              - DELETE
-              - PATCH
-              - OPTIONS
-            allowedHeaders: "*"
-            allowCredentials: true
-            maxAge: 3600
 
 management:
   endpoints:
@@ -95,19 +56,20 @@ management:
   endpoint:
     health:
       show-details: always
-# Application Specific JWT & OTP Properties
+
+# Application Specific JWT, OTP & RabbitMQ Properties
 app:
   jwt:
     secret: ${JWT_SECRET:secret-jwt-key-for-signing-must-be-long-enough-for-hs512-algorithm-minimum-64-bytes!}
     access-token-expiration: ${JWT_ACCESS_TOKEN_EXPIRATION:3600000}
     refresh-token-expiration: ${JWT_REFRESH_TOKEN_EXPIRATION:604800000}
-  
+
   otp:
     length: ${OTP_LENGTH:6}
     expiration-seconds: ${OTP_EXPIRATION_SECONDS:300}
     max-attempts: ${OTP_MAX_ATTEMPTS:3}
     cooldown-seconds: ${OTP_COOLDOWN_SECONDS:60}
-  
+
   rabbitmq:
     exchange: ${RABBITMQ_NOTIFICATION_EXCHANGE:occupify.notification.exchange}
     user-registered-routing-key: ${RABBITMQ_USER_REGISTERED_ROUTING_KEY:user.registered}
