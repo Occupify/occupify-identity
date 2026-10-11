@@ -1,16 +1,20 @@
 package com.occupify.identity.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.occupify.identity.enums.UserRole;
 import com.occupify.identity.enums.UserStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.Instant;
 import java.util.Objects;
@@ -21,15 +25,18 @@ import java.util.UUID;
 @Getter
 @Setter
 @NoArgsConstructor
+@JsonIgnoreProperties(value = { "password", "passwordHash" }, ignoreUnknown = true)
 public class User {
 
     @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", nullable = false, updatable = false)
     private UUID id;
 
     @Column(name = "email", nullable = false, unique = true, length = 255)
     private String email;
 
+    @JsonIgnore
     @Column(name = "password_hash", nullable = false, length = 255)
     private String passwordHash;
 
@@ -49,55 +56,33 @@ public class User {
     private String phoneNumber;
 
     @Column(name = "role", nullable = false, length = 50)
-    private String role;
+    private String role = UserRole.EMPLOYEE.name();
 
     @Column(name = "status", nullable = false, length = 50)
-    private String status;
+    private String status = UserStatus.ACTIVE.name();
 
+    @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
-    public User(UUID id, String email, String passwordHash, String role, String status, Instant createdAt, Instant updatedAt) {
-        this.id = id != null ? id : UUID.randomUUID();
+    public User(UUID id, String email, String passwordHash, String role, String status, Instant createdAt,
+            Instant updatedAt) {
+        this.id = id;
         this.email = email;
         this.passwordHash = passwordHash;
         this.role = role != null ? role : UserRole.EMPLOYEE.name();
         this.status = status != null ? status : UserStatus.ACTIVE.name();
-        this.createdAt = createdAt != null ? createdAt : Instant.now();
-        this.updatedAt = updatedAt != null ? updatedAt : Instant.now();
-    }
-
-    @PrePersist
-    protected void onCreate() {
-        if (id == null) {
-            id = UUID.randomUUID();
-        }
-        if (createdAt == null) {
-            createdAt = Instant.now();
-        }
-        if (updatedAt == null) {
-            updatedAt = Instant.now();
-        }
-        if (role == null) {
-            role = UserRole.EMPLOYEE.name();
-        }
-        if (status == null) {
-            status = UserStatus.ACTIVE.name();
-        }
-    }
-
-    @PreUpdate
-    protected void onUpdate() {
-        this.updatedAt = Instant.now();
     }
 
     // Backward-compatibility helpers for existing auth service code
+    @JsonIgnore
     public String getPassword() {
         return this.passwordHash;
     }
@@ -119,8 +104,7 @@ public class User {
                 UserRole.EMPLOYEE.name(),
                 UserStatus.INACTIVE.name(),
                 Instant.now(),
-                Instant.now()
-        );
+                Instant.now());
     }
 
     public static User createWithRole(String email, String encodedPassword, String role) {
@@ -131,14 +115,15 @@ public class User {
                 role != null ? role : UserRole.EMPLOYEE.name(),
                 UserStatus.ACTIVE.name(),
                 Instant.now(),
-                Instant.now()
-        );
+                Instant.now());
     }
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
         User user = (User) o;
         return Objects.equals(id, user.id);
     }

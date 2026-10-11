@@ -3,15 +3,17 @@ package com.occupify.identity.entity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -26,6 +28,7 @@ import java.util.UUID;
 public class Qualification {
 
     @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", nullable = false, updatable = false)
     private UUID id;
 
@@ -51,16 +54,18 @@ public class Qualification {
     @Column(name = "credential_url", length = 500)
     private String credentialUrl;
 
+    @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
     public Qualification(UUID id, User user, String title, String organization,
                          LocalDate issueDate, LocalDate expirationDate,
                          String credentialId, String credentialUrl) {
-        this.id = id != null ? id : UUID.randomUUID();
+        this.id = id;
         this.user = user;
         this.title = title;
         this.organization = organization;
@@ -68,26 +73,6 @@ public class Qualification {
         this.expirationDate = expirationDate;
         this.credentialId = credentialId;
         this.credentialUrl = credentialUrl;
-        this.createdAt = Instant.now();
-        this.updatedAt = Instant.now();
-    }
-
-    @PrePersist
-    protected void onCreate() {
-        if (id == null) {
-            id = UUID.randomUUID();
-        }
-        if (createdAt == null) {
-            createdAt = Instant.now();
-        }
-        if (updatedAt == null) {
-            updatedAt = Instant.now();
-        }
-    }
-
-    @PreUpdate
-    protected void onUpdate() {
-        this.updatedAt = Instant.now();
     }
 
     @Override
