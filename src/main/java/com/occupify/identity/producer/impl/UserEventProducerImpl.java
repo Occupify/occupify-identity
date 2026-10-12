@@ -17,13 +17,13 @@ public class UserEventProducerImpl implements UserEventProducer {
     private final RabbitTemplate rabbitTemplate;
 
     @Value("${app.rabbitmq.exchange:occupify.notification.exchange}")
-    private String exchange;
+    private String exchange = "occupify.notification.exchange";
 
     @Value("${app.rabbitmq.user-registered-routing-key:user.registered}")
-    private String userRegisteredRoutingKey;
+    private String userRegisteredRoutingKey = "user.registered";
 
     @Value("${app.rabbitmq.password-reset-routing-key:user.password-reset}")
-    private String passwordResetRoutingKey;
+    private String passwordResetRoutingKey = "user.password-reset";
 
     @Override
     public void publishUserRegistered(UserRegisteredEvent event) {

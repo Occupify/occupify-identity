@@ -22,8 +22,7 @@ import java.util.UUID;
 
 public abstract class AbstractBaseController {
 
-    @Autowired(required = false)
-    protected ResponseFactory responseFactory = new ResponseFactory();
+    protected final ResponseFactory responseFactory = new ResponseFactory();
 
     protected <T> SingleResponse<T> successSingle(T data, String message) {
         return responseFactory.createSingleResponse(HttpStatus.OK, message, data);

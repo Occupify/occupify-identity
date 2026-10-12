@@ -9,6 +9,7 @@ import com.occupify.identity.dto.request.auth.SendOtpRequest;
 import com.occupify.identity.dto.request.auth.VerifyOtpRequest;
 import com.occupify.identity.dto.response.auth.AuthResponse;
 import com.occupify.identity.dto.response.auth.UserResponse;
+import org.springframework.lang.Nullable;
 
 public interface AuthService {
 
@@ -26,7 +27,7 @@ public interface AuthService {
 
     void forgotPassword(ForgotPasswordRequest request);
 
-    void resetPassword(String resetToken, ResetPasswordRequest request);
+    void resetPassword(@Nullable String resetToken, ResetPasswordRequest request);
 
     void changePassword(String userEmail, ChangePasswordRequest request);
 }

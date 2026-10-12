@@ -19,83 +19,83 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 @RestControllerAdvice(basePackages = "com.occupify.identity.controller")
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(BaseException.class)
-    public ResponseEntity<ErrorResponse> handleBaseException(BaseException ex, HttpServletRequest request) {
-        String path = request != null ? request.getRequestURI() : "unknown";
-        String correlationId = CorrelationIdFilter.resolveCorrelationId(request);
+        @ExceptionHandler(BaseException.class)
+        public ResponseEntity<ErrorResponse> handleBaseException(BaseException ex, HttpServletRequest request) {
+                String path = request != null ? request.getRequestURI() : "unknown";
+                String correlationId = CorrelationIdFilter.resolveCorrelationId(request);
 
-        log.warn("[Corr-{}] {} at [{}]: Code={} Message={}",
-                correlationId, ex.getClass().getSimpleName(), path, ex.getCode(), ex.getMessage());
+                log.warn("[Corr-{}] {} at [{}]: Code={} Message={}",
+                                correlationId, ex.getClass().getSimpleName(), path, ex.getCode(), ex.getMessage());
 
-        ErrorResponse response = new ErrorResponse(
-                ex.getHttpStatus().value(),
-                ex.getMessage(),
-                ex.getCode());
-        return ResponseEntity.status(ex.getHttpStatus()).body(response);
-    }
-
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorResponse> handleValidationException(MethodArgumentNotValidException ex,
-            HttpServletRequest request) {
-        String path = request != null ? request.getRequestURI() : "unknown";
-        String correlationId = CorrelationIdFilter.resolveCorrelationId(request);
-
-        FieldError fieldError = ex.getBindingResult().getFieldError();
-        String fieldName = fieldError != null ? fieldError.getField() : "request";
-        String message = fieldError != null && fieldError.getDefaultMessage() != null
-                ? fieldError.getDefaultMessage()
-                : "Validation failed for " + fieldName;
-
-        AuthErrorCode code = resolveValidationErrorCode(fieldName);
-
-        log.warn("[Corr-{}] Validation failure at [{}] on field [{}]: {}",
-                correlationId, path, fieldName, message);
-
-        ErrorResponse response = new ErrorResponse(
-                HttpStatus.BAD_REQUEST.value(),
-                message,
-                code.getCode());
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
-    }
-
-    @ExceptionHandler(MaxUploadSizeExceededException.class)
-    public ResponseEntity<ErrorResponse> handleMaxUploadSizeExceeded(
-            MaxUploadSizeExceededException ex,
-            HttpServletRequest request) {
-        String path = request != null ? request.getRequestURI() : "unknown";
-        String correlationId = CorrelationIdFilter.resolveCorrelationId(request);
-
-        log.warn("[Corr-{}] Upload size limit exceeded at [{}]: {}", correlationId, path, ex.getMessage());
-
-        ErrorResponse response = new ErrorResponse(
-                StorageErrorCode.FILE_TOO_LARGE.getHttpStatus().value(),
-                StorageErrorCode.FILE_TOO_LARGE.getMessage(),
-                StorageErrorCode.FILE_TOO_LARGE.getCode());
-        return ResponseEntity.status(StorageErrorCode.FILE_TOO_LARGE.getHttpStatus().value()).body(response);
-    }
-
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleGenericException(Exception ex, HttpServletRequest request) {
-        String path = request != null ? request.getRequestURI() : "unknown";
-        String correlationId = CorrelationIdFilter.resolveCorrelationId(request);
-
-        log.error("[Corr-{}] Unhandled exception at [{}]: {}",
-                correlationId, path, ex.getMessage(), ex);
-
-        ErrorResponse response = new ErrorResponse(
-                HttpStatus.INTERNAL_SERVER_ERROR.value(),
-                SystemErrorCode.INTERNAL_ERROR.getMessage(),
-                SystemErrorCode.INTERNAL_ERROR.getCode());
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
-    }
-
-    private AuthErrorCode resolveValidationErrorCode(String fieldName) {
-        if ("email".equalsIgnoreCase(fieldName)) {
-            return AuthErrorCode.AUTH_000;
+                ErrorResponse response = new ErrorResponse(
+                                ex.getHttpStatus().value(),
+                                ex.getMessage() != null ? ex.getMessage() : ex.getCode(),
+                                ex.getCode());
+                return ResponseEntity.status(ex.getHttpStatus()).body(response);
         }
-        if ("password".equalsIgnoreCase(fieldName)) {
-            return AuthErrorCode.AUTH_002;
+
+        @ExceptionHandler(MethodArgumentNotValidException.class)
+        public ResponseEntity<ErrorResponse> handleValidationException(MethodArgumentNotValidException ex,
+                        HttpServletRequest request) {
+                String path = request != null ? request.getRequestURI() : "unknown";
+                String correlationId = CorrelationIdFilter.resolveCorrelationId(request);
+
+                FieldError fieldError = ex.getBindingResult().getFieldError();
+                String fieldName = fieldError != null ? fieldError.getField() : "request";
+                String message = fieldError != null && fieldError.getDefaultMessage() != null
+                                ? fieldError.getDefaultMessage()
+                                : "Validation failed for " + fieldName;
+
+                AuthErrorCode code = resolveValidationErrorCode(fieldName);
+
+                log.warn("[Corr-{}] Validation failure at [{}] on field [{}]: {}",
+                                correlationId, path, fieldName, message);
+
+                ErrorResponse response = new ErrorResponse(
+                                HttpStatus.BAD_REQUEST.value(),
+                                message,
+                                code.getCode());
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
-        return AuthErrorCode.AUTH_000;
-    }
+
+        @ExceptionHandler(MaxUploadSizeExceededException.class)
+        public ResponseEntity<ErrorResponse> handleMaxUploadSizeExceeded(
+                        MaxUploadSizeExceededException ex,
+                        HttpServletRequest request) {
+                String path = request != null ? request.getRequestURI() : "unknown";
+                String correlationId = CorrelationIdFilter.resolveCorrelationId(request);
+
+                log.warn("[Corr-{}] Upload size limit exceeded at [{}]: {}", correlationId, path, ex.getMessage());
+
+                ErrorResponse response = new ErrorResponse(
+                                StorageErrorCode.FILE_TOO_LARGE.getHttpStatus().value(),
+                                StorageErrorCode.FILE_TOO_LARGE.getMessage(),
+                                StorageErrorCode.FILE_TOO_LARGE.getCode());
+                return ResponseEntity.status(StorageErrorCode.FILE_TOO_LARGE.getHttpStatus().value()).body(response);
+        }
+
+        @ExceptionHandler(Exception.class)
+        public ResponseEntity<ErrorResponse> handleGenericException(Exception ex, HttpServletRequest request) {
+                String path = request != null ? request.getRequestURI() : "unknown";
+                String correlationId = CorrelationIdFilter.resolveCorrelationId(request);
+
+                log.error("[Corr-{}] Unhandled exception at [{}]: {}",
+                                correlationId, path, ex.getMessage(), ex);
+
+                ErrorResponse response = new ErrorResponse(
+                                HttpStatus.INTERNAL_SERVER_ERROR.value(),
+                                SystemErrorCode.INTERNAL_ERROR.getMessage(),
+                                SystemErrorCode.INTERNAL_ERROR.getCode());
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+
+        private AuthErrorCode resolveValidationErrorCode(String fieldName) {
+                if ("email".equalsIgnoreCase(fieldName)) {
+                        return AuthErrorCode.AUTH_000;
+                }
+                if ("password".equalsIgnoreCase(fieldName)) {
+                        return AuthErrorCode.AUTH_002;
+                }
+                return AuthErrorCode.AUTH_000;
+        }
 }
