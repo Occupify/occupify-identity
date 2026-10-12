@@ -35,6 +35,28 @@ public class S3StorageServiceImpl implements StorageService {
     private final S3Client s3Client;
     private final S3Properties properties;
 
+    /**
+     * Tải lên một file ảnh công khai (Public Asset) lên Object Storage (AWS S3 / OCI Object Storage)
+     * và trả về đường dẫn tĩnh công khai (Public URL).
+     * <p>
+     * <b>Mục đích sử dụng:</b><br>
+     * Dùng cho các file công khai như Avatar người dùng, Banner, Logo cần hiển thị trực tiếp
+     * trên trình duyệt web/mobile mà không cần xác thực chữ ký (Bucket phải ở chế độ Public Read).
+     * </p>
+     * <p>
+     * <b>Lưu ý kiến trúc (Public vs Private):</b>
+     * <ul>
+     *   <li>Hàm này <b>KHÔNG</b> dùng cho các file nhạy cảm/bảo mật (như Hợp đồng, CCCD, bảng lương).</li>
+     *   <li>Với các file private, trong tương lai sẽ bổ sung phương thức riêng sử dụng cơ chế
+     *   <i>Presigned URL</i> (URL có thời hạn tạm thời) kết hợp với Bucket ở chế độ Private.</li>
+     * </ul>
+     * </p>
+     *
+     * @param directory Thư mục mục tiêu trong Bucket (ví dụ: "avatars/{userId}")
+     * @param file      Tệp tin multipart tải lên từ client (tối đa 5MB, định dạng: JPEG, PNG, WEBP, GIF)
+     * @return Đường dẫn URL công khai tĩnh (Public URL) trỏ trực tiếp đến file trên Object Storage
+     * @throws StorageException nếu file rỗng, vượt quá 5MB, sai định dạng MIME type, hoặc upload thất bại
+     */
     @Override
     public String uploadImage(String directory, MultipartFile file) {
         validateImageFile(file);
