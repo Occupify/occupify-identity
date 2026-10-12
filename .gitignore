@@ -36,6 +36,9 @@ build/
 *.tmp
 
 ### Environment files ###
+.env
+.env.*
+*.env
 identity.env
 !.env.example
 
