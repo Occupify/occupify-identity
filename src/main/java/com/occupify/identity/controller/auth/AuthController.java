@@ -28,6 +28,7 @@ import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.lang.Nullable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -131,8 +132,8 @@ public class AuthController extends AbstractBaseController {
     public SuccessResponse resetPassword(
             @Valid @RequestBody ResetPasswordRequest request,
             @Parameter(description = "Reset token (optional if provided in request body)")
-            @RequestHeader(value = "X-Reset-Token", required = false) String resetTokenHeader,
-            HttpServletRequest servletRequest) {
+            @RequestHeader(value = "X-Reset-Token", required = false) @Nullable String resetTokenHeader,
+            @Nullable HttpServletRequest servletRequest) {
         String authHeader = servletRequest != null ? servletRequest.getHeader(HttpHeaders.AUTHORIZATION) : null;
         String resolvedToken = resolveResetToken(request.resetToken(), resetTokenHeader, authHeader);
         log.info("[POST /auth/reset-password] Reset password request");
@@ -145,7 +146,7 @@ public class AuthController extends AbstractBaseController {
     @SecurityRequirement(name = OpenApiConfig.SECURITY_SCHEME_NAME)
     public SuccessResponse changePassword(
             @Valid @RequestBody ChangePasswordRequest request,
-            HttpServletRequest servletRequest) {
+            @Nullable HttpServletRequest servletRequest) {
         String injectedEmail = servletRequest != null ? servletRequest.getHeader(HEADER_USER_EMAIL) : null;
         String authHeader = servletRequest != null ? servletRequest.getHeader(HttpHeaders.AUTHORIZATION) : null;
         String userEmail = resolveUserEmail(injectedEmail, authHeader);
@@ -154,8 +155,9 @@ public class AuthController extends AbstractBaseController {
         return success("Password changed successfully");
     }
 
-    private String resolveRefreshToken(String headerToken, RefreshTokenRequest bodyRequest,
-                                        HttpServletRequest request) {
+    @Nullable
+    private String resolveRefreshToken(@Nullable String headerToken, @Nullable RefreshTokenRequest bodyRequest,
+                                        @Nullable HttpServletRequest request) {
         String rawToken = null;
         if (bodyRequest != null && bodyRequest.refreshToken() != null && !bodyRequest.refreshToken().isBlank()) {
             rawToken = bodyRequest.refreshToken();
@@ -174,7 +176,8 @@ public class AuthController extends AbstractBaseController {
         return cleanToken(rawToken);
     }
 
-    private String cleanToken(String token) {
+    @Nullable
+    private String cleanToken(@Nullable String token) {
         if (token == null) {
             return null;
         }
@@ -189,7 +192,8 @@ public class AuthController extends AbstractBaseController {
         return cleaned.isBlank() ? null : cleaned;
     }
 
-    private String resolveResetToken(String bodyToken, String headerToken, String authHeader) {
+    @Nullable
+    private String resolveResetToken(@Nullable String bodyToken, @Nullable String headerToken, @Nullable String authHeader) {
         if (bodyToken != null && !bodyToken.isBlank()) {
             return cleanToken(bodyToken);
         }
@@ -202,7 +206,7 @@ public class AuthController extends AbstractBaseController {
         return null;
     }
 
-    private String resolveUserEmail(String injectedEmail, String authHeader) {
+    private String resolveUserEmail(@Nullable String injectedEmail, @Nullable String authHeader) {
         if (injectedEmail != null && !injectedEmail.isBlank()) {
             return injectedEmail;
         }

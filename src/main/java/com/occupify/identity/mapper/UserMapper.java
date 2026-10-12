@@ -10,7 +10,7 @@ public class UserMapper {
 
     public UserResponse toUserResponse(User user) {
         if (user == null) {
-            return null;
+            throw new IllegalArgumentException("User cannot be null");
         }
         return new UserResponse(
                 user.getId(),

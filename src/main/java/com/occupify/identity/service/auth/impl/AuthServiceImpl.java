@@ -32,6 +32,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.RedisScript;
+import org.springframework.lang.Nullable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -231,7 +232,7 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
-    public void resetPassword(String rawResetToken, ResetPasswordRequest request) {
+    public void resetPassword(@Nullable String rawResetToken, ResetPasswordRequest request) {
         String resetToken = cleanToken(rawResetToken != null && !rawResetToken.isBlank() ? rawResetToken : request.resetToken());
         if (resetToken == null || resetToken.isBlank()) {
             throw new AuthException(AuthErrorCode.AUTH_016, "Password reset token is required");
@@ -460,7 +461,8 @@ public class AuthServiceImpl implements AuthService {
         return Boolean.TRUE.equals(hasKey);
     }
 
-    private SessionMetadata getSession(String refreshToken) {
+    @Nullable
+    private SessionMetadata getSession(@Nullable String refreshToken) {
         if (refreshToken == null || refreshToken.isBlank()) {
             return null;
         }
@@ -636,6 +638,7 @@ public class AuthServiceImpl implements AuthService {
         }
     }
 
+    @Nullable
     private OtpData fetchExistingOtp(String key) {
         String json = redisTemplate.opsForValue().get(key);
         if (json == null || json.isBlank()) {
@@ -658,7 +661,8 @@ public class AuthServiceImpl implements AuthService {
         return prefix + email.trim().toLowerCase();
     }
 
-    private String cleanToken(String token) {
+    @Nullable
+    private String cleanToken(@Nullable String token) {
         if (token == null) {
             return null;
         }
