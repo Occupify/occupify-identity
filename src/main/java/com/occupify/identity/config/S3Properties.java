@@ -4,6 +4,7 @@ import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.lang.Nullable;
 
 @Getter
 @Setter
@@ -14,6 +15,7 @@ public class S3Properties {
     /**
      * Oracle Cloud Infrastructure (OCI) Object Storage namespace (optional for standard AWS S3).
      */
+    @Nullable
     private String bucketNamespace;
 
     /**
@@ -25,6 +27,7 @@ public class S3Properties {
      * Custom endpoint URL for OCI S3-compat, MinIO, or Cloudflare R2 (optional for standard AWS S3).
      * Example for OCI: https://{namespace}.compat.objectstorage.{region}.oraclecloud.com
      */
+    @Nullable
     private String endpoint;
 
     /**
@@ -35,17 +38,20 @@ public class S3Properties {
     /**
      * Access Key ID / Customer Secret Key Access ID.
      */
+    @Nullable
     private String accessKey;
 
     /**
      * Secret Access Key / Customer Secret Key.
      */
+    @Nullable
     private String secretKey;
 
     /**
      * Custom Public URL prefix (CDN or OCI public bucket URL).
      * Example: https://objectstorage.ap-singapore-1.oraclecloud.com/n/{namespace}/b/{bucketName}/o
      */
+    @Nullable
     private String publicUrlPrefix;
 
     /**

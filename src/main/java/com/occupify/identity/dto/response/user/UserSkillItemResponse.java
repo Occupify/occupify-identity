@@ -1,13 +1,14 @@
 package com.occupify.identity.dto.response.user;
 
+import org.springframework.lang.Nullable;
 import java.util.UUID;
 
 public record UserSkillItemResponse(
-        UUID skillId,
-        String skillName,
-        String category,
+        @Nullable UUID skillId,
+        @Nullable String skillName,
+        @Nullable String category,
         boolean isTopSkill,
-        String proficiencyLevel,
-        Integer yearsOfExperience
+        @Nullable String proficiencyLevel,
+        @Nullable Integer yearsOfExperience
 ) {
 }

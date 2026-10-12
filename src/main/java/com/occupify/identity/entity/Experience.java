@@ -14,6 +14,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.springframework.lang.Nullable;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -43,25 +44,25 @@ public class Experience {
     private String organization;
 
     @Column(name = "employment_type", length = 50)
-    private String employmentType;
+    private @Nullable String employmentType;
 
     @Column(name = "location", length = 150)
-    private String location;
+    private @Nullable String location;
 
     @Column(name = "location_type", length = 30)
-    private String locationType;
+    private @Nullable String locationType;
 
     @Column(name = "start_date", nullable = false)
     private LocalDate startDate;
 
     @Column(name = "end_date")
-    private LocalDate endDate;
+    private @Nullable LocalDate endDate;
 
     @Column(name = "is_current", nullable = false)
     private boolean isCurrent = false;
 
     @Column(name = "description", columnDefinition = "TEXT")
-    private String description;
+    private @Nullable String description;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -71,9 +72,14 @@ public class Experience {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    public Experience(UUID id, User user, String title, String organization, String employmentType,
-                      String location, String locationType, LocalDate startDate, LocalDate endDate,
-                      boolean isCurrent, String description) {
+    public Experience(UUID id, User user, String title, String organization,
+                      @Nullable String employmentType,
+                      @Nullable String location,
+                      @Nullable String locationType,
+                      LocalDate startDate,
+                      @Nullable LocalDate endDate,
+                      boolean isCurrent,
+                      @Nullable String description) {
         this.id = id;
         this.user = user;
         this.title = title;

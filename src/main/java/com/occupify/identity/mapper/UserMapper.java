@@ -22,7 +22,7 @@ public class UserMapper {
 
     public UserProfileResponse toUserProfileResponse(User user) {
         if (user == null) {
-            return null;
+            throw new IllegalArgumentException("User cannot be null");
         }
         return new UserProfileResponse(
                 user.getId(),

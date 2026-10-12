@@ -1,6 +1,8 @@
 package com.occupify.identity.dto.response.user;
 
+import org.springframework.lang.Nullable;
+
 public record AvatarResponse(
-        String avatarUrl
+        @Nullable String avatarUrl
 ) {
 }

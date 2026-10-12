@@ -6,6 +6,8 @@ import com.occupify.identity.exception.storage.StorageException;
 import com.occupify.identity.service.storage.StorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.core.sync.RequestBody;
@@ -29,33 +31,41 @@ public class S3StorageServiceImpl implements StorageService {
             "image/jpg",
             "image/png",
             "image/webp",
-            "image/gif"
-    );
+            "image/gif");
 
     private final S3Client s3Client;
     private final S3Properties properties;
 
     /**
-     * Tải lên một file ảnh công khai (Public Asset) lên Object Storage (AWS S3 / OCI Object Storage)
+     * Tải lên một file ảnh công khai (Public Asset) lên Object Storage (AWS S3 /
+     * OCI Object Storage)
      * và trả về đường dẫn tĩnh công khai (Public URL).
      * <p>
      * <b>Mục đích sử dụng:</b><br>
-     * Dùng cho các file công khai như Avatar người dùng, Banner, Logo cần hiển thị trực tiếp
-     * trên trình duyệt web/mobile mà không cần xác thực chữ ký (Bucket phải ở chế độ Public Read).
+     * Dùng cho các file công khai như Avatar người dùng, Banner, Logo cần hiển thị
+     * trực tiếp
+     * trên trình duyệt web/mobile mà không cần xác thực chữ ký (Bucket phải ở chế
+     * độ Public Read).
      * </p>
      * <p>
      * <b>Lưu ý kiến trúc (Public vs Private):</b>
      * <ul>
-     *   <li>Hàm này <b>KHÔNG</b> dùng cho các file nhạy cảm/bảo mật (như Hợp đồng, CCCD, bảng lương).</li>
-     *   <li>Với các file private, trong tương lai sẽ bổ sung phương thức riêng sử dụng cơ chế
-     *   <i>Presigned URL</i> (URL có thời hạn tạm thời) kết hợp với Bucket ở chế độ Private.</li>
+     * <li>Hàm này <b>KHÔNG</b> dùng cho các file nhạy cảm/bảo mật (như Hợp đồng,
+     * CCCD, bảng lương).</li>
+     * <li>Với các file private, trong tương lai sẽ bổ sung phương thức riêng sử
+     * dụng cơ chế
+     * <i>Presigned URL</i> (URL có thời hạn tạm thời) kết hợp với Bucket ở chế độ
+     * Private.</li>
      * </ul>
      * </p>
      *
      * @param directory Thư mục mục tiêu trong Bucket (ví dụ: "avatars/{userId}")
-     * @param file      Tệp tin multipart tải lên từ client (tối đa 5MB, định dạng: JPEG, PNG, WEBP, GIF)
-     * @return Đường dẫn URL công khai tĩnh (Public URL) trỏ trực tiếp đến file trên Object Storage
-     * @throws StorageException nếu file rỗng, vượt quá 5MB, sai định dạng MIME type, hoặc upload thất bại
+     * @param file      Tệp tin multipart tải lên từ client (tối đa 5MB, định dạng:
+     *                  JPEG, PNG, WEBP, GIF)
+     * @return Đường dẫn URL công khai tĩnh (Public URL) trỏ trực tiếp đến file trên
+     *         Object Storage
+     * @throws StorageException nếu file rỗng, vượt quá 5MB, sai định dạng MIME
+     *                          type, hoặc upload thất bại
      */
     @Override
     public String uploadImage(String directory, MultipartFile file) {
@@ -118,7 +128,8 @@ public class S3StorageServiceImpl implements StorageService {
     }
 
     /**
-     * Kiểm tra tính hợp lệ của file tải lên (không rỗng, dung lượng tối đa 5MB, đúng định dạng ảnh).
+     * Kiểm tra tính hợp lệ của file tải lên (không rỗng, dung lượng tối đa 5MB,
+     * đúng định dạng ảnh).
      *
      * @param file File multipart gửi lên từ client
      * @throws StorageException nếu file rỗng, vượt quá 5MB hoặc sai định dạng MIME
@@ -152,15 +163,19 @@ public class S3StorageServiceImpl implements StorageService {
                 return ext;
             }
         }
-        if ("image/png".equalsIgnoreCase(contentType)) return ".png";
-        if ("image/webp".equalsIgnoreCase(contentType)) return ".webp";
-        if ("image/gif".equalsIgnoreCase(contentType)) return ".gif";
+        if ("image/png".equalsIgnoreCase(contentType))
+            return ".png";
+        if ("image/webp".equalsIgnoreCase(contentType))
+            return ".webp";
+        if ("image/gif".equalsIgnoreCase(contentType))
+            return ".gif";
         return ".jpg";
     }
 
     /**
      * Xây dựng URL công khai của đối tượng đã upload trên cloud.
-     * Thứ tự ưu tiên: Custom CDN/Prefix -> Oracle Cloud (OCI) Native URL -> Custom S3 Endpoint -> AWS S3.
+     * Thứ tự ưu tiên: Custom CDN/Prefix -> Oracle Cloud (OCI) Native URL -> Custom
+     * S3 Endpoint -> AWS S3.
      *
      * @param key Đường dẫn định danh của đối tượng trong bucket (object key)
      * @return Đường dẫn URL đầy đủ để client có thể truy cập xem ảnh
@@ -187,11 +202,13 @@ public class S3StorageServiceImpl implements StorageService {
 
     /**
      * Phân tích và trích xuất Object Key từ URL công khai hoặc chuỗi key thô.
-     * Nếu là URL bên ngoài không thuộc bucket của hệ thống (ví dụ ảnh Unsplash), trả về null để bỏ qua xóa.
+     * Nếu là URL bên ngoài không thuộc bucket của hệ thống (ví dụ ảnh Unsplash),
+     * trả về null để bỏ qua xóa.
      *
      * @param fileUrlOrKey URL đầy đủ hoặc Object Key cần phân tích
      * @return Object Key thực tế trong bucket, hoặc null nếu là URL bên ngoài
      */
+    @Nullable
     private String extractObjectKey(String fileUrlOrKey) {
         if (!fileUrlOrKey.startsWith("http://") && !fileUrlOrKey.startsWith("https://")) {
             return fileUrlOrKey.replaceAll("^/+", "");

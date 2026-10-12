@@ -1,5 +1,6 @@
 package com.occupify.identity.dto.response.user;
 
+import org.springframework.lang.Nullable;
 import java.time.LocalDate;
 import java.util.UUID;
 
@@ -8,8 +9,8 @@ public record QualificationItemResponse(
         String title,
         String organization,
         LocalDate issueDate,
-        LocalDate expirationDate,
-        String credentialId,
-        String credentialUrl
+        @Nullable LocalDate expirationDate,
+        @Nullable String credentialId,
+        @Nullable String credentialUrl
 ) {
 }

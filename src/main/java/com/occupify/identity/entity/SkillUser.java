@@ -11,6 +11,7 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.springframework.lang.Nullable;
 
 import java.util.Objects;
 
@@ -38,10 +39,10 @@ public class SkillUser {
     private boolean isTopSkill = false;
 
     @Column(name = "proficiency_level", length = 30)
-    private String proficiencyLevel;
+    private @Nullable String proficiencyLevel;
 
     @Column(name = "years_of_experience")
-    private Integer yearsOfExperience;
+    private @Nullable Integer yearsOfExperience;
 
     public SkillUser(User user, Skill skill) {
         this.user = user;
@@ -49,7 +50,9 @@ public class SkillUser {
         this.id = new SkillUserId(user.getId(), skill.getId());
     }
 
-    public SkillUser(User user, Skill skill, boolean isTopSkill, String proficiencyLevel, Integer yearsOfExperience) {
+    public SkillUser(User user, Skill skill, boolean isTopSkill,
+                     @Nullable String proficiencyLevel,
+                     @Nullable Integer yearsOfExperience) {
         this.user = user;
         this.skill = skill;
         this.id = new SkillUserId(user.getId(), skill.getId());

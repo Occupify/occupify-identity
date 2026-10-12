@@ -17,7 +17,7 @@ public class UserProfileMapper {
 
     public ExperienceItemResponse toExperienceResponse(Experience entity) {
         if (entity == null) {
-            return null;
+            throw new IllegalArgumentException("Experience entity cannot be null");
         }
         return new ExperienceItemResponse(
                 entity.getId(),
@@ -35,7 +35,7 @@ public class UserProfileMapper {
 
     public EducationItemResponse toEducationResponse(Education entity) {
         if (entity == null) {
-            return null;
+            throw new IllegalArgumentException("Education entity cannot be null");
         }
         return new EducationItemResponse(
                 entity.getId(),
@@ -51,7 +51,7 @@ public class UserProfileMapper {
 
     public QualificationItemResponse toQualificationResponse(Qualification entity) {
         if (entity == null) {
-            return null;
+            throw new IllegalArgumentException("Qualification entity cannot be null");
         }
         return new QualificationItemResponse(
                 entity.getId(),
@@ -66,7 +66,7 @@ public class UserProfileMapper {
 
     public UserSkillItemResponse toUserSkillResponse(SkillUser entity) {
         if (entity == null) {
-            return null;
+            throw new IllegalArgumentException("SkillUser entity cannot be null");
         }
         Skill skill = entity.getSkill();
         return new UserSkillItemResponse(
@@ -81,7 +81,7 @@ public class UserProfileMapper {
 
     public SkillResponse toSkillResponse(Skill entity) {
         if (entity == null) {
-            return null;
+            throw new IllegalArgumentException("Skill entity cannot be null");
         }
         return new SkillResponse(
                 entity.getId(),

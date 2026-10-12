@@ -16,6 +16,8 @@ import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import org.springframework.lang.Nullable;
+
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
@@ -41,19 +43,19 @@ public class User {
     private String passwordHash;
 
     @Column(name = "full_name", length = 150)
-    private String fullName;
+    private @Nullable String fullName;
 
     @Column(name = "headline", length = 255)
-    private String headline;
+    private @Nullable String headline;
 
     @Column(name = "avatar_url", length = 500)
-    private String avatarUrl;
+    private @Nullable String avatarUrl;
 
     @Column(name = "bio", columnDefinition = "TEXT")
-    private String bio;
+    private @Nullable String bio;
 
     @Column(name = "phone_number", length = 30)
-    private String phoneNumber;
+    private @Nullable String phoneNumber;
 
     @Column(name = "role", nullable = false, length = 50)
     private String role = UserRole.EMPLOYEE.name();
