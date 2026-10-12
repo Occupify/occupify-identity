@@ -32,8 +32,11 @@ jobs:
           dos2unix mvnw
           chmod +x mvnw
 
+      - name: Null-Safety Verification (NullAway)
+        run: ./mvnw clean compile -Pnullaway -Dmaven.compiler.failOnWarning=true
+
       - name: Build and Test with Maven
-        run: ./mvnw test -DfailIfNoTests=false
+        run: ./mvnw test -DfailIfNoTests=false -Dmaven.compiler.failOnWarning=true
 
       - name: Publish Test Results
         uses: dorny/test-reporter@v1

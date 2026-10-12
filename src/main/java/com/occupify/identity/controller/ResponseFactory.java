@@ -7,6 +7,7 @@ import com.occupify.identity.dto.base.SingleResponse;
 import com.occupify.identity.dto.base.SuccessResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -61,7 +62,7 @@ public class ResponseFactory {
         return ResponseEntity.status(status).body(response);
     }
 
-    public ResponseEntity<ErrorResponse> error(HttpStatus status, String message, String errorCode) {
+    public ResponseEntity<ErrorResponse> error(HttpStatus status, String message, @Nullable String errorCode) {
         ErrorResponse response = new ErrorResponse(status.value(), message, errorCode);
         return ResponseEntity.status(status).body(response);
     }

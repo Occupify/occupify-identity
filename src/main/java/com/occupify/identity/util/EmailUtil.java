@@ -2,6 +2,8 @@ package com.occupify.identity.util;
 
 import com.occupify.identity.exception.auth.AuthErrorCode;
 import com.occupify.identity.exception.auth.AuthException;
+import org.jetbrains.annotations.Contract;
+import org.springframework.lang.Nullable;
 
 import java.util.regex.Pattern;
 
@@ -17,7 +19,7 @@ public final class EmailUtil {
         // Utility class
     }
 
-    public static boolean isValid(String email) {
+    public static boolean isValid(@Nullable String email) {
         if (email == null) {
             return false;
         }
@@ -28,7 +30,9 @@ public final class EmailUtil {
         return EMAIL_PATTERN.matcher(trimmed).matches();
     }
 
-    public static String normalize(String email) {
+    @Nullable
+    @Contract("!null -> !null; null -> null")
+    public static String normalize(@Nullable String email) {
         if (email == null) {
             return null;
         }
@@ -41,7 +45,7 @@ public final class EmailUtil {
         }
     }
 
-    public static String mask(String email) {
+    public static String mask(@Nullable String email) {
         if (email == null || !email.contains("@")) {
             return "***";
         }
