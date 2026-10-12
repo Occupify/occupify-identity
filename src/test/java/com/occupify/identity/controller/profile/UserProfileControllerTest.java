@@ -74,7 +74,7 @@ class UserProfileControllerTest {
     // =========================================================================
 
     @Test
-    @DisplayName("POST /api/v1/users/me/experiences -> should return 201 Created with CreatedResponse<ExperienceItemResponse>")
+    @DisplayName("POST /users/me/experiences -> should return 201 Created with CreatedResponse<ExperienceItemResponse>")
     void addExperience_success_shouldReturn201Created() throws Exception {
         UUID expId = UUID.randomUUID();
         CreateExperienceRequest request = new CreateExperienceRequest(
@@ -105,7 +105,7 @@ class UserProfileControllerTest {
         when(userProfileService.addExperience(eq(testUserId), any(CreateExperienceRequest.class)))
                 .thenReturn(responseItem);
 
-        mockMvc.perform(post("/api/v1/users/me/experiences")
+        mockMvc.perform(post("/users/me/experiences")
                         .header("X-User-Id", testUserId.toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request))
@@ -118,7 +118,7 @@ class UserProfileControllerTest {
     }
 
     @Test
-    @DisplayName("POST /api/v1/users/me/experiences -> should return 400 Bad Request when title or organization is blank")
+    @DisplayName("POST /users/me/experiences -> should return 400 Bad Request when title or organization is blank")
     void addExperience_validationFailure_blankTitle_shouldReturn400() throws Exception {
         CreateExperienceRequest invalidRequest = new CreateExperienceRequest(
                 "", // Blank title violates @NotBlank
@@ -132,7 +132,7 @@ class UserProfileControllerTest {
                 "Summary"
         );
 
-        mockMvc.perform(post("/api/v1/users/me/experiences")
+        mockMvc.perform(post("/users/me/experiences")
                         .header("X-User-Id", testUserId.toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(invalidRequest))
@@ -142,7 +142,7 @@ class UserProfileControllerTest {
     }
 
     @Test
-    @DisplayName("PUT /api/v1/users/me/experiences/{id} -> should return 200 OK with SingleResponse<ExperienceItemResponse>")
+    @DisplayName("PUT /users/me/experiences/{id} -> should return 200 OK with SingleResponse<ExperienceItemResponse>")
     void updateExperience_success_shouldReturn200() throws Exception {
         UUID expId = UUID.randomUUID();
         UpdateExperienceRequest request = new UpdateExperienceRequest(
@@ -173,7 +173,7 @@ class UserProfileControllerTest {
         when(userProfileService.updateExperience(eq(testUserId), eq(expId), any(UpdateExperienceRequest.class)))
                 .thenReturn(responseItem);
 
-        mockMvc.perform(put("/api/v1/users/me/experiences/{id}", expId)
+        mockMvc.perform(put("/users/me/experiences/{id}", expId)
                         .header("X-User-Id", testUserId.toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request))
@@ -185,12 +185,12 @@ class UserProfileControllerTest {
     }
 
     @Test
-    @DisplayName("DELETE /api/v1/users/me/experiences/{id} -> should return 200 OK with SuccessResponse")
+    @DisplayName("DELETE /users/me/experiences/{id} -> should return 200 OK with SuccessResponse")
     void deleteExperience_success_shouldReturn200() throws Exception {
         UUID expId = UUID.randomUUID();
         doNothing().when(userProfileService).deleteExperience(testUserId, expId);
 
-        mockMvc.perform(delete("/api/v1/users/me/experiences/{id}", expId)
+        mockMvc.perform(delete("/users/me/experiences/{id}", expId)
                         .header("X-User-Id", testUserId.toString())
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
@@ -203,7 +203,7 @@ class UserProfileControllerTest {
     // =========================================================================
 
     @Test
-    @DisplayName("POST /api/v1/users/me/educations -> should return 201 Created with CreatedResponse<EducationItemResponse>")
+    @DisplayName("POST /users/me/educations -> should return 201 Created with CreatedResponse<EducationItemResponse>")
     void addEducation_success_shouldReturn201Created() throws Exception {
         UUID eduId = UUID.randomUUID();
         CreateEducationRequest request = new CreateEducationRequest(
@@ -230,7 +230,7 @@ class UserProfileControllerTest {
         when(userProfileService.addEducation(eq(testUserId), any(CreateEducationRequest.class)))
                 .thenReturn(responseItem);
 
-        mockMvc.perform(post("/api/v1/users/me/educations")
+        mockMvc.perform(post("/users/me/educations")
                         .header("X-User-Id", testUserId.toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request))
@@ -243,7 +243,7 @@ class UserProfileControllerTest {
     }
 
     @Test
-    @DisplayName("POST /api/v1/users/me/educations -> should return 400 Bad Request when institution is blank")
+    @DisplayName("POST /users/me/educations -> should return 400 Bad Request when institution is blank")
     void addEducation_validationFailure_blankInstitution_shouldReturn400() throws Exception {
         CreateEducationRequest invalidRequest = new CreateEducationRequest(
                 "", // Blank institution violates @NotBlank
@@ -255,7 +255,7 @@ class UserProfileControllerTest {
                 LocalDate.of(2019, 6, 1)
         );
 
-        mockMvc.perform(post("/api/v1/users/me/educations")
+        mockMvc.perform(post("/users/me/educations")
                         .header("X-User-Id", testUserId.toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(invalidRequest))
@@ -265,7 +265,7 @@ class UserProfileControllerTest {
     }
 
     @Test
-    @DisplayName("PUT /api/v1/users/me/educations/{id} -> should return 200 OK with SingleResponse<EducationItemResponse>")
+    @DisplayName("PUT /users/me/educations/{id} -> should return 200 OK with SingleResponse<EducationItemResponse>")
     void updateEducation_success_shouldReturn200() throws Exception {
         UUID eduId = UUID.randomUUID();
         UpdateEducationRequest request = new UpdateEducationRequest(
@@ -292,7 +292,7 @@ class UserProfileControllerTest {
         when(userProfileService.updateEducation(eq(testUserId), eq(eduId), any(UpdateEducationRequest.class)))
                 .thenReturn(responseItem);
 
-        mockMvc.perform(put("/api/v1/users/me/educations/{id}", eduId)
+        mockMvc.perform(put("/users/me/educations/{id}", eduId)
                         .header("X-User-Id", testUserId.toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request))
@@ -304,12 +304,12 @@ class UserProfileControllerTest {
     }
 
     @Test
-    @DisplayName("DELETE /api/v1/users/me/educations/{id} -> should return 200 OK with SuccessResponse")
+    @DisplayName("DELETE /users/me/educations/{id} -> should return 200 OK with SuccessResponse")
     void deleteEducation_success_shouldReturn200() throws Exception {
         UUID eduId = UUID.randomUUID();
         doNothing().when(userProfileService).deleteEducation(testUserId, eduId);
 
-        mockMvc.perform(delete("/api/v1/users/me/educations/{id}", eduId)
+        mockMvc.perform(delete("/users/me/educations/{id}", eduId)
                         .header("X-User-Id", testUserId.toString())
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
@@ -322,7 +322,7 @@ class UserProfileControllerTest {
     // =========================================================================
 
     @Test
-    @DisplayName("POST /api/v1/users/me/qualifications -> should return 201 Created with CreatedResponse<QualificationItemResponse>")
+    @DisplayName("POST /users/me/qualifications -> should return 201 Created with CreatedResponse<QualificationItemResponse>")
     void addQualification_success_shouldReturn201Created() throws Exception {
         UUID qualId = UUID.randomUUID();
         CreateQualificationRequest request = new CreateQualificationRequest(
@@ -347,7 +347,7 @@ class UserProfileControllerTest {
         when(userProfileService.addQualification(eq(testUserId), any(CreateQualificationRequest.class)))
                 .thenReturn(responseItem);
 
-        mockMvc.perform(post("/api/v1/users/me/qualifications")
+        mockMvc.perform(post("/users/me/qualifications")
                         .header("X-User-Id", testUserId.toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request))
@@ -360,7 +360,7 @@ class UserProfileControllerTest {
     }
 
     @Test
-    @DisplayName("POST /api/v1/users/me/qualifications -> should return 400 Bad Request when title is blank")
+    @DisplayName("POST /users/me/qualifications -> should return 400 Bad Request when title is blank")
     void addQualification_validationFailure_blankTitle_shouldReturn400() throws Exception {
         CreateQualificationRequest invalidRequest = new CreateQualificationRequest(
                 "", // Blank title violates @NotBlank
@@ -371,7 +371,7 @@ class UserProfileControllerTest {
                 "https://verify.url"
         );
 
-        mockMvc.perform(post("/api/v1/users/me/qualifications")
+        mockMvc.perform(post("/users/me/qualifications")
                         .header("X-User-Id", testUserId.toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(invalidRequest))
@@ -381,7 +381,7 @@ class UserProfileControllerTest {
     }
 
     @Test
-    @DisplayName("PUT /api/v1/users/me/qualifications/{id} -> should return 200 OK with SingleResponse<QualificationItemResponse>")
+    @DisplayName("PUT /users/me/qualifications/{id} -> should return 200 OK with SingleResponse<QualificationItemResponse>")
     void updateQualification_success_shouldReturn200() throws Exception {
         UUID qualId = UUID.randomUUID();
         UpdateQualificationRequest request = new UpdateQualificationRequest(
@@ -406,7 +406,7 @@ class UserProfileControllerTest {
         when(userProfileService.updateQualification(eq(testUserId), eq(qualId), any(UpdateQualificationRequest.class)))
                 .thenReturn(responseItem);
 
-        mockMvc.perform(put("/api/v1/users/me/qualifications/{id}", qualId)
+        mockMvc.perform(put("/users/me/qualifications/{id}", qualId)
                         .header("X-User-Id", testUserId.toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request))
@@ -418,12 +418,12 @@ class UserProfileControllerTest {
     }
 
     @Test
-    @DisplayName("DELETE /api/v1/users/me/qualifications/{id} -> should return 200 OK with SuccessResponse")
+    @DisplayName("DELETE /users/me/qualifications/{id} -> should return 200 OK with SuccessResponse")
     void deleteQualification_success_shouldReturn200() throws Exception {
         UUID qualId = UUID.randomUUID();
         doNothing().when(userProfileService).deleteQualification(testUserId, qualId);
 
-        mockMvc.perform(delete("/api/v1/users/me/qualifications/{id}", qualId)
+        mockMvc.perform(delete("/users/me/qualifications/{id}", qualId)
                         .header("X-User-Id", testUserId.toString())
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
@@ -436,7 +436,7 @@ class UserProfileControllerTest {
     // =========================================================================
 
     @Test
-    @DisplayName("POST /api/v1/users/me/skills -> should return 201 Created with CreatedResponse<UserSkillItemResponse>")
+    @DisplayName("POST /users/me/skills -> should return 201 Created with CreatedResponse<UserSkillItemResponse>")
     void addSkill_success_shouldReturn201Created() throws Exception {
         UUID skillId = UUID.randomUUID();
         AddUserSkillRequest request = new AddUserSkillRequest(
@@ -460,7 +460,7 @@ class UserProfileControllerTest {
         when(userProfileService.addSkill(eq(testUserId), any(AddUserSkillRequest.class)))
                 .thenReturn(responseItem);
 
-        mockMvc.perform(post("/api/v1/users/me/skills")
+        mockMvc.perform(post("/users/me/skills")
                         .header("X-User-Id", testUserId.toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request))
@@ -473,7 +473,7 @@ class UserProfileControllerTest {
     }
 
     @Test
-    @DisplayName("PUT /api/v1/users/me/skills/{skillId} -> should return 200 OK with SingleResponse<UserSkillItemResponse>")
+    @DisplayName("PUT /users/me/skills/{skillId} -> should return 200 OK with SingleResponse<UserSkillItemResponse>")
     void updateSkill_success_shouldReturn200() throws Exception {
         UUID skillId = UUID.randomUUID();
         UpdateUserSkillRequest request = new UpdateUserSkillRequest(
@@ -494,7 +494,7 @@ class UserProfileControllerTest {
         when(userProfileService.updateSkill(eq(testUserId), eq(skillId), any(UpdateUserSkillRequest.class)))
                 .thenReturn(responseItem);
 
-        mockMvc.perform(put("/api/v1/users/me/skills/{skillId}", skillId)
+        mockMvc.perform(put("/users/me/skills/{skillId}", skillId)
                         .header("X-User-Id", testUserId.toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request))
@@ -507,12 +507,12 @@ class UserProfileControllerTest {
     }
 
     @Test
-    @DisplayName("DELETE /api/v1/users/me/skills/{skillId} -> should return 200 OK with SuccessResponse")
+    @DisplayName("DELETE /users/me/skills/{skillId} -> should return 200 OK with SuccessResponse")
     void removeSkill_success_shouldReturn200() throws Exception {
         UUID skillId = UUID.randomUUID();
         doNothing().when(userProfileService).removeSkill(testUserId, skillId);
 
-        mockMvc.perform(delete("/api/v1/users/me/skills/{skillId}", skillId)
+        mockMvc.perform(delete("/users/me/skills/{skillId}", skillId)
                         .header("X-User-Id", testUserId.toString())
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
@@ -521,7 +521,7 @@ class UserProfileControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/v1/skills -> should return 200 OK with SingleResponse<List<SkillResponse>>")
+    @DisplayName("GET /users/me/skills -> should return 200 OK with SingleResponse<List<SkillResponse>>")
     void searchSkills_success_shouldReturn200AndSkillList() throws Exception {
         UUID s1 = UUID.randomUUID();
         UUID s2 = UUID.randomUUID();
@@ -532,7 +532,7 @@ class UserProfileControllerTest {
 
         when(userProfileService.searchSkills("spring")).thenReturn(mockCatalog);
 
-        mockMvc.perform(get("/api/v1/skills")
+        mockMvc.perform(get("/users/me/skills")
                         .param("keyword", "spring")
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
