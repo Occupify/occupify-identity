@@ -3,6 +3,7 @@ package com.occupify.identity.controller.user;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.occupify.identity.dto.request.user.UpdateUserProfileRequest;
+import com.occupify.identity.dto.response.user.AvatarResponse;
 import com.occupify.identity.dto.response.user.UserDetailResponse;
 import com.occupify.identity.dto.response.user.UserProfileResponse;
 import com.occupify.identity.security.JwtUtils;
@@ -15,6 +16,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
@@ -27,6 +29,7 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -210,6 +213,51 @@ class UserControllerTest {
         doNothing().when(userService).deleteMyAccount(testUserId);
 
         mockMvc.perform(delete("/api/v1/users/me")
+                        .header("X-User-Id", testUserId.toString())
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statusCode").value(200))
+                .andExpect(jsonPath("$.message").isNotEmpty());
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/users/me/avatar -> should return 200 OK with AvatarResponse")
+    void uploadMyAvatar_success_shouldReturn200() throws Exception {
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "avatar.png", "image/png", "sample-image-bytes".getBytes()
+        );
+        String avatarUrl = "https://objectstorage.ap-singapore-1.oraclecloud.com/.../avatar.png";
+        when(userService.uploadMyAvatar(eq(testUserId), any())).thenReturn(new AvatarResponse(avatarUrl));
+
+        mockMvc.perform(multipart("/api/v1/users/me/avatar")
+                        .file(file)
+                        .header("X-User-Id", testUserId.toString())
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statusCode").value(200))
+                .andExpect(jsonPath("$.data.avatarUrl").value(avatarUrl));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/users/me/avatar -> should return 200 OK with AvatarResponse")
+    void getMyAvatar_success_shouldReturn200() throws Exception {
+        String avatarUrl = "https://objectstorage.ap-singapore-1.oraclecloud.com/.../avatar.png";
+        when(userService.getMyAvatar(testUserId)).thenReturn(new AvatarResponse(avatarUrl));
+
+        mockMvc.perform(get("/api/v1/users/me/avatar")
+                        .header("X-User-Id", testUserId.toString())
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statusCode").value(200))
+                .andExpect(jsonPath("$.data.avatarUrl").value(avatarUrl));
+    }
+
+    @Test
+    @DisplayName("DELETE /api/v1/users/me/avatar -> should return 200 OK with SuccessResponse")
+    void deleteMyAvatar_success_shouldReturn200() throws Exception {
+        doNothing().when(userService).deleteMyAvatar(testUserId);
+
+        mockMvc.perform(delete("/api/v1/users/me/avatar")
                         .header("X-User-Id", testUserId.toString())
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())

@@ -1,6 +1,8 @@
 package com.occupify.identity.service.user.impl;
 
+import com.occupify.identity.constant.StorageConstants;
 import com.occupify.identity.dto.request.user.UpdateUserProfileRequest;
+import com.occupify.identity.dto.response.user.AvatarResponse;
 import com.occupify.identity.dto.response.user.EducationItemResponse;
 import com.occupify.identity.dto.response.user.ExperienceItemResponse;
 import com.occupify.identity.dto.response.user.QualificationItemResponse;
@@ -23,6 +25,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.UUID;
@@ -38,6 +41,7 @@ public class UserServiceImpl implements UserService {
     private final EducationRepository educationRepository;
     private final QualificationRepository qualificationRepository;
     private final SkillUserRepository skillUserRepository;
+    private final com.occupify.identity.service.storage.StorageService storageService;
     private final UserMapper userMapper;
     private final UserProfileMapper userProfileMapper;
 
@@ -89,9 +93,56 @@ public class UserServiceImpl implements UserService {
         log.info("Account soft-deleted successfully for userId: {}", currentUserId);
     }
 
+    @Override
+    @Transactional
+    public AvatarResponse uploadMyAvatar(UUID currentUserId, MultipartFile file) {
+        log.info("Uploading avatar for userId: {}", currentUserId);
+        User user = findActiveUserOrThrow(currentUserId);
+
+        String oldAvatarUrl = user.getAvatarUrl();
+        String newAvatarUrl = storageService.uploadImage(StorageConstants.getAvatarPath(currentUserId), file);
+
+        user.setAvatarUrl(newAvatarUrl);
+        userRepository.save(user);
+        log.info("Successfully updated avatarUrl for userId: {} to {}", currentUserId, newAvatarUrl);
+
+        if (oldAvatarUrl != null && !oldAvatarUrl.isBlank()) {
+            try {
+                storageService.deleteFile(oldAvatarUrl);
+            } catch (Exception e) {
+                log.warn("Failed to delete obsolete avatar file for userId {}: {}", currentUserId, oldAvatarUrl, e);
+            }
+        }
+
+        return new AvatarResponse(newAvatarUrl);
+    }
+
+    @Override
+    public AvatarResponse getMyAvatar(UUID currentUserId) {
+        log.debug("Fetching avatar for userId: {}", currentUserId);
+        User user = findActiveUserOrThrow(currentUserId);
+        return new AvatarResponse(user.getAvatarUrl());
+    }
+
+    @Override
+    @Transactional
+    public void deleteMyAvatar(UUID currentUserId) {
+        log.info("Deleting avatar for userId: {}", currentUserId);
+        User user = findActiveUserOrThrow(currentUserId);
+
+        String currentAvatarUrl = user.getAvatarUrl();
+        if (currentAvatarUrl != null && !currentAvatarUrl.isBlank()) {
+            storageService.deleteFile(currentAvatarUrl);
+            user.setAvatarUrl(null);
+            userRepository.save(user);
+            log.info("Successfully cleared avatar for userId: {}", currentUserId);
+        }
+    }
+
     private User findActiveUserOrThrow(UUID userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UserException(UserErrorCode.USER_NOT_FOUND, "User not found with id: " + userId));
+                .orElseThrow(
+                        () -> new UserException(UserErrorCode.USER_NOT_FOUND, "User not found with id: " + userId));
 
         if (UserStatus.DELETED.name().equalsIgnoreCase(user.getStatus())) {
             throw new UserException(UserErrorCode.USER_ALREADY_DELETED, "User account has been deleted");
@@ -113,7 +164,8 @@ public class UserServiceImpl implements UserService {
                 .map(userProfileMapper::toEducationResponse)
                 .toList();
 
-        List<QualificationItemResponse> qualifications = qualificationRepository.findByUserIdOrderByIssueDateDesc(userId)
+        List<QualificationItemResponse> qualifications = qualificationRepository
+                .findByUserIdOrderByIssueDateDesc(userId)
                 .stream()
                 .map(userProfileMapper::toQualificationResponse)
                 .toList();
@@ -128,7 +180,6 @@ public class UserServiceImpl implements UserService {
                 experiences,
                 educations,
                 qualifications,
-                skills
-        );
+                skills);
     }
 }

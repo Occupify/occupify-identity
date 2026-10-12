@@ -1,6 +1,8 @@
 package com.occupify.identity.service.user;
 
+import com.occupify.identity.constant.StorageConstants;
 import com.occupify.identity.dto.request.user.UpdateUserProfileRequest;
+import com.occupify.identity.dto.response.user.AvatarResponse;
 import com.occupify.identity.dto.response.user.UserDetailResponse;
 import com.occupify.identity.dto.response.user.UserProfileResponse;
 import com.occupify.identity.entity.User;
@@ -15,6 +17,7 @@ import com.occupify.identity.repository.ExperienceRepository;
 import com.occupify.identity.repository.QualificationRepository;
 import com.occupify.identity.repository.SkillUserRepository;
 import com.occupify.identity.repository.UserRepository;
+import com.occupify.identity.service.storage.StorageService;
 import com.occupify.identity.service.user.impl.UserServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -24,6 +27,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mock.web.MockMultipartFile;
 
 import java.time.Instant;
 import java.util.Collections;
@@ -33,6 +37,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -54,6 +59,9 @@ class UserServiceTest {
 
     @Mock
     private SkillUserRepository skillUserRepository;
+
+    @Mock
+    private StorageService storageService;
 
     @Spy
     private UserMapper userMapper = new UserMapper();
@@ -187,6 +195,74 @@ class UserServiceTest {
         userService.deleteMyAccount(userId);
 
         assertThat(activeUser.getStatus()).isEqualTo(UserStatus.DELETED.name());
+        verify(userRepository).save(activeUser);
+    }
+
+    @Test
+    @DisplayName("uploadMyAvatar -> when user has no prior avatar -> uploads to storage and saves new URL")
+    void uploadMyAvatar_whenNoPriorAvatar_shouldUploadAndSave() {
+        activeUser.setAvatarUrl(null);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(activeUser));
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        MockMultipartFile file = new MockMultipartFile("file", "avatar.png", "image/png", "bytes".getBytes());
+        String expectedUrl = "https://objectstorage.ap-singapore-1.oraclecloud.com/.../new-avatar.png";
+        when(storageService.uploadImage(eq(StorageConstants.getAvatarPath(userId)), eq(file))).thenReturn(expectedUrl);
+
+        AvatarResponse response = userService.uploadMyAvatar(userId, file);
+
+        assertThat(response).isNotNull();
+        assertThat(response.avatarUrl()).isEqualTo(expectedUrl);
+        assertThat(activeUser.getAvatarUrl()).isEqualTo(expectedUrl);
+        verify(storageService).uploadImage(StorageConstants.getAvatarPath(userId), file);
+        verify(userRepository).save(activeUser);
+    }
+
+    @Test
+    @DisplayName("uploadMyAvatar -> when user already has old avatar -> uploads new and triggers delete of old avatar")
+    void uploadMyAvatar_whenOldAvatarExists_shouldUploadAndCleanOldAvatar() {
+        String oldUrl = "https://objectstorage.ap-singapore-1.oraclecloud.com/.../old-avatar.png";
+        activeUser.setAvatarUrl(oldUrl);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(activeUser));
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        MockMultipartFile file = new MockMultipartFile("file", "new-avatar.jpg", "image/jpeg", "bytes".getBytes());
+        String newUrl = "https://objectstorage.ap-singapore-1.oraclecloud.com/.../new-avatar.jpg";
+        when(storageService.uploadImage(eq(StorageConstants.getAvatarPath(userId)), eq(file))).thenReturn(newUrl);
+
+        AvatarResponse response = userService.uploadMyAvatar(userId, file);
+
+        assertThat(response.avatarUrl()).isEqualTo(newUrl);
+        assertThat(activeUser.getAvatarUrl()).isEqualTo(newUrl);
+        verify(storageService).uploadImage(StorageConstants.getAvatarPath(userId), file);
+        verify(storageService).deleteFile(oldUrl);
+        verify(userRepository).save(activeUser);
+    }
+
+    @Test
+    @DisplayName("getMyAvatar -> returns current user avatar URL")
+    void getMyAvatar_shouldReturnAvatarUrl() {
+        activeUser.setAvatarUrl("https://objectstorage.../my-avatar.png");
+        when(userRepository.findById(userId)).thenReturn(Optional.of(activeUser));
+
+        AvatarResponse response = userService.getMyAvatar(userId);
+
+        assertThat(response).isNotNull();
+        assertThat(response.avatarUrl()).isEqualTo("https://objectstorage.../my-avatar.png");
+    }
+
+    @Test
+    @DisplayName("deleteMyAvatar -> when user has avatar -> deletes from storage and sets avatarUrl null")
+    void deleteMyAvatar_whenUserHasAvatar_shouldDeleteFileAndResetUrl() {
+        String currentUrl = "https://objectstorage.../current-avatar.png";
+        activeUser.setAvatarUrl(currentUrl);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(activeUser));
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        userService.deleteMyAvatar(userId);
+
+        assertThat(activeUser.getAvatarUrl()).isNull();
+        verify(storageService).deleteFile(currentUrl);
         verify(userRepository).save(activeUser);
     }
 }
