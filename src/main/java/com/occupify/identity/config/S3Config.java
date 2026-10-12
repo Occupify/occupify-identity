@@ -35,15 +35,21 @@ public class S3Config {
         }
 
         // 2. Configure Credentials
+        log.info("S3 Credentials status -> accessKey: [{}], configured: {}",
+                properties.getAccessKey(),
+                properties.getSecretKey() != null && !properties.getSecretKey().isBlank());
+
         if (properties.getAccessKey() != null && !properties.getAccessKey().isBlank()
                 && properties.getSecretKey() != null && !properties.getSecretKey().isBlank()) {
+            log.info("Successfully loaded S3 credentials into StaticCredentialsProvider.");
             AwsBasicCredentials credentials = AwsBasicCredentials.create(
                     properties.getAccessKey().trim(),
                     properties.getSecretKey().trim()
             );
             builder.credentialsProvider(StaticCredentialsProvider.create(credentials));
         } else {
-            log.warn("S3 credentials not fully supplied. Falling back to dummy credentials for development/testing.");
+            log.warn("S3 credentials not fully supplied (accessKey='{}', secretKey='{}'). Falling back to dummy credentials for development/testing.",
+                    properties.getAccessKey(), properties.getSecretKey());
             builder.credentialsProvider(StaticCredentialsProvider.create(
                     AwsBasicCredentials.create("dummy-access-key", "dummy-secret-key")
             ));
