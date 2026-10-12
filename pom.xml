@@ -23,6 +23,7 @@
         <jjwt.version>0.12.6</jjwt.version>
         <springdoc.version>2.6.0</springdoc.version>
         <lombok.version>1.18.40</lombok.version>
+        <aws.sdk.version>2.25.40</aws.sdk.version>
     </properties>
 
     <dependencies>
@@ -121,6 +122,19 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-amqp</artifactId>
+        </dependency>
+
+        <!-- AWS SDK v2 S3 (S3-compatible Object Storage for OCI, AWS S3, MinIO, Cloudflare R2) -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <version>${aws.sdk.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>commons-logging</groupId>
+                    <artifactId>commons-logging</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <!-- Testing Dependencies -->

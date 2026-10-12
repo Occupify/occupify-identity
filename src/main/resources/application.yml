@@ -7,6 +7,13 @@ spring:
   config:
     import: optional:file:.env[.properties]
 
+  # --- File Upload Configuration ---
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 5MB
+      max-request-size: 10MB
+
   # --- PostgreSQL DataSource Configuration (JDBC) ---
   datasource:
     url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5530}/${POSTGRES_DB:occupify_identity}
@@ -74,4 +81,16 @@ app:
     exchange: ${RABBITMQ_NOTIFICATION_EXCHANGE:occupify.notification.exchange}
     user-registered-routing-key: ${RABBITMQ_USER_REGISTERED_ROUTING_KEY:user.registered}
     password-reset-routing-key: ${RABBITMQ_PASSWORD_RESET_ROUTING_KEY:user.password-reset}
+
+  storage:
+    s3:
+      bucket-namespace: ${S3_BUCKET_NAMESPACE:}
+      region: ${S3_REGION:ap-singapore-1}
+      endpoint: ${S3_ENDPOINT:}
+      bucket-name: ${S3_BUCKET_NAME:occupify-storage}
+      access-key: ${S3_ACCESS_KEY:}
+      secret-key: ${S3_SECRET_KEY:}
+      public-url-prefix: ${S3_PUBLIC_URL_PREFIX:}
+      path-style-access-enabled: ${S3_PATH_STYLE_ACCESS_ENABLED:true}
+
 

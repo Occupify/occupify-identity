@@ -2,6 +2,7 @@ package com.occupify.identity.exception;
 
 import com.occupify.identity.dto.base.ErrorResponse;
 import com.occupify.identity.exception.auth.AuthErrorCode;
+import com.occupify.identity.exception.storage.StorageErrorCode;
 import com.occupify.identity.exception.system.SystemErrorCode;
 import com.occupify.identity.filter.CorrelationIdFilter;
 import jakarta.servlet.http.HttpServletRequest;
@@ -12,6 +13,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 @Slf4j
 @RestControllerAdvice(basePackages = "com.occupify.identity.controller")
@@ -28,13 +30,13 @@ public class GlobalExceptionHandler {
         ErrorResponse response = new ErrorResponse(
                 ex.getHttpStatus().value(),
                 ex.getMessage(),
-                ex.getCode()
-        );
+                ex.getCode());
         return ResponseEntity.status(ex.getHttpStatus()).body(response);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorResponse> handleValidationException(MethodArgumentNotValidException ex, HttpServletRequest request) {
+    public ResponseEntity<ErrorResponse> handleValidationException(MethodArgumentNotValidException ex,
+            HttpServletRequest request) {
         String path = request != null ? request.getRequestURI() : "unknown";
         String correlationId = CorrelationIdFilter.resolveCorrelationId(request);
 
@@ -52,9 +54,24 @@ public class GlobalExceptionHandler {
         ErrorResponse response = new ErrorResponse(
                 HttpStatus.BAD_REQUEST.value(),
                 message,
-                code.getCode()
-        );
+                code.getCode());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ErrorResponse> handleMaxUploadSizeExceeded(
+            MaxUploadSizeExceededException ex,
+            HttpServletRequest request) {
+        String path = request != null ? request.getRequestURI() : "unknown";
+        String correlationId = CorrelationIdFilter.resolveCorrelationId(request);
+
+        log.warn("[Corr-{}] Upload size limit exceeded at [{}]: {}", correlationId, path, ex.getMessage());
+
+        ErrorResponse response = new ErrorResponse(
+                StorageErrorCode.FILE_TOO_LARGE.getHttpStatus().value(),
+                StorageErrorCode.FILE_TOO_LARGE.getMessage(),
+                StorageErrorCode.FILE_TOO_LARGE.getCode());
+        return ResponseEntity.status(StorageErrorCode.FILE_TOO_LARGE.getHttpStatus().value()).body(response);
     }
 
     @ExceptionHandler(Exception.class)
@@ -68,8 +85,7 @@ public class GlobalExceptionHandler {
         ErrorResponse response = new ErrorResponse(
                 HttpStatus.INTERNAL_SERVER_ERROR.value(),
                 SystemErrorCode.INTERNAL_ERROR.getMessage(),
-                SystemErrorCode.INTERNAL_ERROR.getCode()
-        );
+                SystemErrorCode.INTERNAL_ERROR.getCode());
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
     }
 
