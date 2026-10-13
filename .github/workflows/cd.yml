@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - oc-58-cd
   workflow_dispatch:
 
 concurrency:
