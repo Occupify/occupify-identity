@@ -86,8 +86,6 @@ jobs:
           export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$(id -u)/bus"
           echo "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR" >> "$GITHUB_ENV"
           echo "DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS" >> "$GITHUB_ENV"
-          OWNER="${{ github.repository_owner }}"
-          echo "IMAGE_OWNER=${OWNER,,}" >> "$GITHUB_ENV"
 
       - name: Sync Permanent Configs & Environment
         working-directory: gitops-manifests
@@ -101,7 +99,7 @@ jobs:
           mkdir -p ~/.config/systemd/user/git-ops/nginx/body
 
           echo "Inject identity.env..."
-          printf "%s\nIMAGE_OWNER=occupify\n" "$IDENTITY_ENV_CONTENT" > ~/.config/systemd/user/git-ops/env/identity.env
+          printf "%s\n" "$IDENTITY_ENV_CONTENT" > ~/.config/systemd/user/git-ops/env/identity.env
 
           echo "Sync compose and service units..."
           cp compose/docker.*.compose.yml ~/.config/systemd/user/git-ops/compose/
@@ -112,7 +110,6 @@ jobs:
         working-directory: gitops-manifests
         env:
           RUNNER_TRACKING_ID: ""
-          IMAGE_OWNER: ${{ env.IMAGE_OWNER }}
         run: |
           make be-identity
 
