@@ -201,7 +201,7 @@
     </build>
 
     <profiles>
-        <!-- Enterprise Null-Safety & Static Analysis Profile  -->
+        <!-- Enterprise Null-Safety & Static Analysis Profile -->
         <profile>
             <id>nullaway</id>
             <build>
@@ -216,6 +216,7 @@
                             <compilerArgs>
                                 <arg>-Werror</arg>
                                 <arg>-XDcompilePolicy=simple</arg>
+                                <arg>--should-stop=ifError=FLOW</arg>
                                 <arg>-Xplugin:ErrorProne -XepDisableAllChecks -Xep:NullAway:ERROR -XepOpt:NullAway:AnnotatedPackages=com.occupify -XepOpt:NullAway:CustomInitializerAnnotations=org.springframework.beans.factory.annotation.Value -XepOpt:NullAway:ExcludedClassAnnotations=jakarta.persistence.Entity</arg>
                                 <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED</arg>
                                 <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED</arg>
@@ -241,7 +242,7 @@
                                 <path>
                                     <groupId>com.google.errorprone</groupId>
                                     <artifactId>error_prone_core</artifactId>
-                                    <version>2.31.0</version>
+                                    <version>2.40.0</version>
                                 </path>
                                 <path>
                                     <groupId>com.uber.nullaway</groupId>
