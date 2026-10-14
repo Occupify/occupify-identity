@@ -1,6 +1,7 @@
 package com.occupify.identity.service.storage.impl;
 
 import com.occupify.identity.config.S3Properties;
+import com.occupify.identity.constant.StorageConstants;
 import com.occupify.identity.exception.storage.StorageErrorCode;
 import com.occupify.identity.exception.storage.StorageException;
 import com.occupify.identity.service.storage.StorageService;
@@ -186,8 +187,8 @@ public class S3StorageServiceImpl implements StorageService {
         }
 
         if (properties.getBucketNamespace() != null && !properties.getBucketNamespace().isBlank()) {
-            String region = properties.getRegion() != null ? properties.getRegion().trim() : "ap-singapore-1";
-            return String.format("https://objectstorage.%s.oraclecloud.com/n/%s/b/%s/o/%s",
+            String region = properties.getRegion() != null ? properties.getRegion().trim() : StorageConstants.DEFAULT_OCI_REGION;
+            return String.format(StorageConstants.OCI_PUBLIC_URL_FORMAT,
                     region, properties.getBucketNamespace().trim(), properties.getBucketName().trim(), key);
         }
 
@@ -196,8 +197,8 @@ public class S3StorageServiceImpl implements StorageService {
                     properties.getBucketName().trim(), key);
         }
 
-        String region = properties.getRegion() != null ? properties.getRegion().trim() : "us-east-1";
-        return String.format("https://%s.s3.%s.amazonaws.com/%s", properties.getBucketName().trim(), region, key);
+        String region = properties.getRegion() != null ? properties.getRegion().trim() : StorageConstants.DEFAULT_AWS_REGION;
+        return String.format(StorageConstants.AWS_PUBLIC_URL_FORMAT, properties.getBucketName().trim(), region, key);
     }
 
     /**
