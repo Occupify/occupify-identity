@@ -83,11 +83,11 @@ class UserControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/v1/users/me -> should return 200 OK with SingleResponse<UserProfileResponse>")
+    @DisplayName("GET /users/me -> should return 200 OK with SingleResponse<UserProfileResponse>")
     void getMyProfile_success_shouldReturn200AndUserProfile() throws Exception {
         when(userService.getMyProfile(testUserId)).thenReturn(mockProfileResponse);
 
-        mockMvc.perform(get("/api/v1/users/me")
+        mockMvc.perform(get("/users/me")
                         .header("X-User-Id", testUserId.toString())
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
@@ -99,11 +99,11 @@ class UserControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/v1/users/me/detail -> should return 200 OK with SingleResponse<UserDetailResponse>")
+    @DisplayName("GET /users/me/detail -> should return 200 OK with SingleResponse<UserDetailResponse>")
     void getMyProfileDetail_success_shouldReturn200AndFullDetail() throws Exception {
         when(userService.getMyProfileDetail(testUserId)).thenReturn(mockDetailResponse);
 
-        mockMvc.perform(get("/api/v1/users/me/detail")
+        mockMvc.perform(get("/users/me/detail")
                         .header("X-User-Id", testUserId.toString())
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
@@ -117,7 +117,7 @@ class UserControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/v1/users/{id}/detail -> should return 200 OK for public profile view")
+    @DisplayName("GET /users/{id}/detail -> should return 200 OK for public profile view")
     void getPublicUserDetail_success_shouldReturn200AndPublicProfile() throws Exception {
         UUID publicUserId = UUID.randomUUID();
         UserProfileResponse publicProfile = new UserProfileResponse(
@@ -143,7 +143,7 @@ class UserControllerTest {
 
         when(userService.getPublicUserDetail(publicUserId)).thenReturn(publicDetail);
 
-        mockMvc.perform(get("/api/v1/users/{id}/detail", publicUserId)
+        mockMvc.perform(get("/users/{id}/detail", publicUserId)
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statusCode").value(200))
@@ -152,7 +152,7 @@ class UserControllerTest {
     }
 
     @Test
-    @DisplayName("PUT /api/v1/users/me -> should return 200 OK with SingleResponse<UserProfileResponse> when valid")
+    @DisplayName("PUT /users/me -> should return 200 OK with SingleResponse<UserProfileResponse> when valid")
     void updateMyProfile_success_shouldReturn200AndUpdatedProfile() throws Exception {
         UpdateUserProfileRequest request = new UpdateUserProfileRequest(
                 "Alex Updated",
@@ -177,7 +177,7 @@ class UserControllerTest {
 
         when(userService.updateMyProfile(eq(testUserId), any(UpdateUserProfileRequest.class))).thenReturn(updatedProfile);
 
-        mockMvc.perform(put("/api/v1/users/me")
+        mockMvc.perform(put("/users/me")
                         .header("X-User-Id", testUserId.toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request))
@@ -189,7 +189,7 @@ class UserControllerTest {
     }
 
     @Test
-    @DisplayName("PUT /api/v1/users/me -> should return 400 Bad Request when fullName is blank")
+    @DisplayName("PUT /users/me -> should return 400 Bad Request when fullName is blank")
     void updateMyProfile_validationFailure_blankFullName_shouldReturn400() throws Exception {
         UpdateUserProfileRequest invalidRequest = new UpdateUserProfileRequest(
                 "", // Blank full name violates @NotBlank
@@ -198,7 +198,7 @@ class UserControllerTest {
                 "+84901234567"
         );
 
-        mockMvc.perform(put("/api/v1/users/me")
+        mockMvc.perform(put("/users/me")
                         .header("X-User-Id", testUserId.toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(invalidRequest))
@@ -208,11 +208,11 @@ class UserControllerTest {
     }
 
     @Test
-    @DisplayName("DELETE /api/v1/users/me -> should return 200 OK with SuccessResponse")
+    @DisplayName("DELETE /users/me -> should return 200 OK with SuccessResponse")
     void deleteMyAccount_success_shouldReturn200SuccessEnvelope() throws Exception {
         doNothing().when(userService).deleteMyAccount(testUserId);
 
-        mockMvc.perform(delete("/api/v1/users/me")
+        mockMvc.perform(delete("/users/me")
                         .header("X-User-Id", testUserId.toString())
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
@@ -221,7 +221,7 @@ class UserControllerTest {
     }
 
     @Test
-    @DisplayName("POST /api/v1/users/me/avatar -> should return 200 OK with AvatarResponse")
+    @DisplayName("POST /users/me/avatar -> should return 200 OK with AvatarResponse")
     void uploadMyAvatar_success_shouldReturn200() throws Exception {
         MockMultipartFile file = new MockMultipartFile(
                 "file", "avatar.png", "image/png", "sample-image-bytes".getBytes()
@@ -229,7 +229,7 @@ class UserControllerTest {
         String avatarUrl = "https://objectstorage.ap-singapore-1.oraclecloud.com/.../avatar.png";
         when(userService.uploadMyAvatar(eq(testUserId), any())).thenReturn(new AvatarResponse(avatarUrl));
 
-        mockMvc.perform(multipart("/api/v1/users/me/avatar")
+        mockMvc.perform(multipart("/users/me/avatar")
                         .file(file)
                         .header("X-User-Id", testUserId.toString())
                         .accept(MediaType.APPLICATION_JSON))
@@ -239,12 +239,12 @@ class UserControllerTest {
     }
 
     @Test
-    @DisplayName("GET /api/v1/users/me/avatar -> should return 200 OK with AvatarResponse")
+    @DisplayName("GET /users/me/avatar -> should return 200 OK with AvatarResponse")
     void getMyAvatar_success_shouldReturn200() throws Exception {
         String avatarUrl = "https://objectstorage.ap-singapore-1.oraclecloud.com/.../avatar.png";
         when(userService.getMyAvatar(testUserId)).thenReturn(new AvatarResponse(avatarUrl));
 
-        mockMvc.perform(get("/api/v1/users/me/avatar")
+        mockMvc.perform(get("/users/me/avatar")
                         .header("X-User-Id", testUserId.toString())
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
@@ -253,11 +253,11 @@ class UserControllerTest {
     }
 
     @Test
-    @DisplayName("DELETE /api/v1/users/me/avatar -> should return 200 OK with SuccessResponse")
+    @DisplayName("DELETE /users/me/avatar -> should return 200 OK with SuccessResponse")
     void deleteMyAvatar_success_shouldReturn200() throws Exception {
         doNothing().when(userService).deleteMyAvatar(testUserId);
 
-        mockMvc.perform(delete("/api/v1/users/me/avatar")
+        mockMvc.perform(delete("/users/me/avatar")
                         .header("X-User-Id", testUserId.toString())
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())

@@ -34,7 +34,7 @@ import java.util.UUID;
 
 @Slf4j
 @RestController
-@RequestMapping("/api/v1/users")
+@RequestMapping("/users")
 @Tag(name = "User Account", description = "Endpoints for user profile and account self-management")
 public class UserController extends AbstractBaseController {
 
@@ -52,7 +52,7 @@ public class UserController extends AbstractBaseController {
                         @Parameter(description = "Injected user ID from Gateway", hidden = true) @RequestHeader(value = "X-User-Id", required = false) String headerUserId,
                         HttpServletRequest request) {
                 UUID currentUserId = resolveUserId(headerUserId, request, jwtUtils);
-                log.info("[GET /api/v1/users/me] Fetching profile for user: {}", currentUserId);
+                log.info("[GET /users/me] Fetching profile for user: {}", currentUserId);
                 UserProfileResponse response = userService.getMyProfile(currentUserId);
                 return successSingle(response, "User profile retrieved successfully");
         }
@@ -63,7 +63,7 @@ public class UserController extends AbstractBaseController {
                         @Parameter(description = "Injected user ID from Gateway", hidden = true) @RequestHeader(value = "X-User-Id", required = false) String headerUserId,
                         HttpServletRequest request) {
                 UUID currentUserId = resolveUserId(headerUserId, request, jwtUtils);
-                log.info("[GET /api/v1/users/me/detail] Fetching 360-degree profile for user: {}", currentUserId);
+                log.info("[GET /users/me/detail] Fetching 360-degree profile for user: {}", currentUserId);
                 UserDetailResponse response = userService.getMyProfileDetail(currentUserId);
                 return successSingle(response, "User full profile detail retrieved successfully");
         }
@@ -71,7 +71,7 @@ public class UserController extends AbstractBaseController {
         @GetMapping("/{id}/detail")
         @Operation(summary = "Get public user profile detail by ID", description = "Retrieves public candidate detail for external review")
         public SingleResponse<UserDetailResponse> getPublicUserDetail(@PathVariable("id") UUID id) {
-                log.info("[GET /api/v1/users/{}/detail] Fetching public candidate detail", id);
+                log.info("[GET /users/{}/detail] Fetching public candidate detail", id);
                 UserDetailResponse response = userService.getPublicUserDetail(id);
                 return successSingle(response, "Public user profile detail retrieved successfully");
         }
@@ -83,7 +83,7 @@ public class UserController extends AbstractBaseController {
                         @Valid @RequestBody UpdateUserProfileRequest updateRequest,
                         HttpServletRequest request) {
                 UUID currentUserId = resolveUserId(headerUserId, request, jwtUtils);
-                log.info("[PUT /api/v1/users/me] Updating profile for user: {}", currentUserId);
+                log.info("[PUT /users/me] Updating profile for user: {}", currentUserId);
                 UserProfileResponse response = userService.updateMyProfile(currentUserId, updateRequest);
                 return successSingle(response, "User profile updated successfully");
         }
@@ -94,7 +94,7 @@ public class UserController extends AbstractBaseController {
                         @Parameter(description = "Injected user ID from Gateway", hidden = true) @RequestHeader(value = "X-User-Id", required = false) String headerUserId,
                         HttpServletRequest request) {
                 UUID currentUserId = resolveUserId(headerUserId, request, jwtUtils);
-                log.warn("[DELETE /api/v1/users/me] Self-deleting account for user: {}", currentUserId);
+                log.warn("[DELETE /users/me] Self-deleting account for user: {}", currentUserId);
                 userService.deleteMyAccount(currentUserId);
                 return success("User account deleted successfully");
         }
@@ -106,7 +106,7 @@ public class UserController extends AbstractBaseController {
                         @RequestParam("file") MultipartFile file,
                         HttpServletRequest request) {
                 UUID currentUserId = resolveUserId(headerUserId, request, jwtUtils);
-                log.info("[POST /api/v1/users/me/avatar] Uploading avatar for user: {}", currentUserId);
+                log.info("[POST /users/me/avatar] Uploading avatar for user: {}", currentUserId);
                 AvatarResponse response = userService.uploadMyAvatar(currentUserId, file);
                 return successSingle(response, "Avatar uploaded successfully");
         }
@@ -117,7 +117,7 @@ public class UserController extends AbstractBaseController {
                         @Parameter(description = "Injected user ID from Gateway", hidden = true) @RequestHeader(value = "X-User-Id", required = false) String headerUserId,
                         HttpServletRequest request) {
                 UUID currentUserId = resolveUserId(headerUserId, request, jwtUtils);
-                log.info("[GET /api/v1/users/me/avatar] Fetching avatar for user: {}", currentUserId);
+                log.info("[GET /users/me/avatar] Fetching avatar for user: {}", currentUserId);
                 AvatarResponse response = userService.getMyAvatar(currentUserId);
                 return successSingle(response, "Avatar retrieved successfully");
         }
@@ -128,7 +128,7 @@ public class UserController extends AbstractBaseController {
                         @Parameter(description = "Injected user ID from Gateway", hidden = true) @RequestHeader(value = "X-User-Id", required = false) String headerUserId,
                         HttpServletRequest request) {
                 UUID currentUserId = resolveUserId(headerUserId, request, jwtUtils);
-                log.info("[DELETE /api/v1/users/me/avatar] Deleting avatar for user: {}", currentUserId);
+                log.info("[DELETE /users/me/avatar] Deleting avatar for user: {}", currentUserId);
                 userService.deleteMyAvatar(currentUserId);
                 return success("Avatar deleted successfully");
         }
