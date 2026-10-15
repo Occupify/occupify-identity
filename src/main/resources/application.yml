@@ -5,7 +5,14 @@ spring:
   application:
     name: occupify-identity
   config:
-    import: optional:file:.env[.properties]
+    import:
+      - optional:file:.env[.properties]
+      - optional:file:identity.env[.properties]
+
+  web:
+    resources:
+      add-mappings: true
+      static-locations: classpath:/static/
 
   # --- File Upload Configuration ---
   servlet:
@@ -92,5 +99,16 @@ app:
       secret-key: ${S3_SECRET_KEY:}
       public-url-prefix: ${S3_PUBLIC_URL_PREFIX:}
       path-style-access-enabled: ${S3_PATH_STYLE_ACCESS_ENABLED:true}
+
+scalar:
+  path: ${SCALAR_PATH:/docs}
+  url: ${SCALAR_URL:/v3/api-docs}
+  enabled: ${SCALAR_ENABLED:true}
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: true
 
 
