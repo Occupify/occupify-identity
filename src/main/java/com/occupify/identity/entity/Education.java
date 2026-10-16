@@ -14,6 +14,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.springframework.lang.Nullable;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -44,22 +45,22 @@ public class Education {
     private String fieldOfStudy;
 
     @Column(name = "degree", length = 150)
-    private String degree;
+    private @Nullable String degree;
 
     @Column(name = "grade", length = 50)
-    private String grade;
+    private @Nullable String grade;
 
     @Column(name = "description", columnDefinition = "TEXT")
-    private String description;
+    private @Nullable String description;
 
     @Column(name = "start_date", nullable = false)
     private LocalDate startDate;
 
     @Column(name = "end_date")
-    private LocalDate endDate;
+    private @Nullable LocalDate endDate;
 
     @Column(name = "document_url", length = 500)
-    private String documentUrl;
+    private @Nullable String documentUrl;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -70,8 +71,8 @@ public class Education {
     private Instant updatedAt;
 
     public Education(UUID id, User user, Institution institution, String fieldOfStudy,
-                     String degree, String grade, String description,
-                     LocalDate startDate, LocalDate endDate, String documentUrl) {
+                     @Nullable String degree, @Nullable String grade, @Nullable String description,
+                     LocalDate startDate, @Nullable LocalDate endDate, @Nullable String documentUrl) {
         this.id = id;
         this.user = user;
         this.institution = institution;

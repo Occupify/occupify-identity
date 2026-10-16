@@ -14,6 +14,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.springframework.lang.Nullable;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -36,7 +37,7 @@ public class Qualification {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @Column(name = "title", nullable = false, length = 200)
+    @Column(name = "title", nullable = false, length = 150)
     private String title;
 
     @Column(name = "organization", nullable = false, length = 200)
@@ -46,16 +47,16 @@ public class Qualification {
     private LocalDate issueDate;
 
     @Column(name = "expiration_date")
-    private LocalDate expirationDate;
+    private @Nullable LocalDate expirationDate;
 
     @Column(name = "credential_id", length = 100)
-    private String credentialId;
+    private @Nullable String credentialId;
 
     @Column(name = "credential_url", length = 500)
-    private String credentialUrl;
+    private @Nullable String credentialUrl;
 
     @Column(name = "document_url", length = 500)
-    private String documentUrl;
+    private @Nullable String documentUrl;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -66,8 +67,9 @@ public class Qualification {
     private Instant updatedAt;
 
     public Qualification(UUID id, User user, String title, String organization,
-                         LocalDate issueDate, LocalDate expirationDate,
-                         String credentialId, String credentialUrl, String documentUrl) {
+                         LocalDate issueDate, @Nullable LocalDate expirationDate,
+                         @Nullable String credentialId, @Nullable String credentialUrl,
+                         @Nullable String documentUrl) {
         this.id = id;
         this.user = user;
         this.title = title;

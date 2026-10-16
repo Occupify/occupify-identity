@@ -6,8 +6,8 @@ import java.util.UUID;
 
 public record EducationItemResponse(
         UUID id,
-        UUID institutionId,
-        String institutionName,
+        @Nullable UUID institutionId,
+        @Nullable String institutionName,
         @Nullable String institutionLogoUrl,
         String fieldOfStudy,
         @Nullable String degree,
