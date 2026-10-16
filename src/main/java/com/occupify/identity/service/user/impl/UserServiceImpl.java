@@ -20,6 +20,7 @@ import com.occupify.identity.repository.ExperienceRepository;
 import com.occupify.identity.repository.QualificationRepository;
 import com.occupify.identity.repository.SkillUserRepository;
 import com.occupify.identity.repository.UserRepository;
+import com.occupify.identity.service.storage.StorageService;
 import com.occupify.identity.service.user.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -118,13 +119,6 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public AvatarResponse getMyAvatar(UUID currentUserId) {
-        log.debug("Fetching avatar for userId: {}", currentUserId);
-        User user = findActiveUserOrThrow(currentUserId);
-        return new AvatarResponse(user.getAvatarUrl());
-    }
-
-    @Override
     @Transactional
     public void deleteMyAvatar(UUID currentUserId) {
         log.info("Deleting avatar for userId: {}", currentUserId);
@@ -132,7 +126,11 @@ public class UserServiceImpl implements UserService {
 
         String currentAvatarUrl = user.getAvatarUrl();
         if (currentAvatarUrl != null && !currentAvatarUrl.isBlank()) {
-            storageService.deleteFile(currentAvatarUrl);
+            try {
+                storageService.deleteFile(currentAvatarUrl);
+            } catch (Exception e) {
+                log.warn("Failed to delete obsolete avatar file for userId {}: {}", currentUserId, currentAvatarUrl, e);
+            }
             user.setAvatarUrl(null);
             userRepository.save(user);
             log.info("Successfully cleared avatar for userId: {}", currentUserId);

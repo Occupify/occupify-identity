@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
@@ -231,20 +232,6 @@ class UserControllerTest {
 
         mockMvc.perform(multipart("/users/me/avatar")
                         .file(file)
-                        .header("X-User-Id", testUserId.toString())
-                        .accept(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.statusCode").value(200))
-                .andExpect(jsonPath("$.data.avatarUrl").value(avatarUrl));
-    }
-
-    @Test
-    @DisplayName("GET /users/me/avatar -> should return 200 OK with AvatarResponse")
-    void getMyAvatar_success_shouldReturn200() throws Exception {
-        String avatarUrl = "https://objectstorage.ap-singapore-1.oraclecloud.com/.../avatar.png";
-        when(userService.getMyAvatar(testUserId)).thenReturn(new AvatarResponse(avatarUrl));
-
-        mockMvc.perform(get("/users/me/avatar")
                         .header("X-User-Id", testUserId.toString())
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())

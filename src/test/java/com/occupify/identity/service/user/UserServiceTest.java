@@ -240,18 +240,6 @@ class UserServiceTest {
     }
 
     @Test
-    @DisplayName("getMyAvatar -> returns current user avatar URL")
-    void getMyAvatar_shouldReturnAvatarUrl() {
-        activeUser.setAvatarUrl("https://objectstorage.../my-avatar.png");
-        when(userRepository.findById(userId)).thenReturn(Optional.of(activeUser));
-
-        AvatarResponse response = userService.getMyAvatar(userId);
-
-        assertThat(response).isNotNull();
-        assertThat(response.avatarUrl()).isEqualTo("https://objectstorage.../my-avatar.png");
-    }
-
-    @Test
     @DisplayName("deleteMyAvatar -> when user has avatar -> deletes from storage and sets avatarUrl null")
     void deleteMyAvatar_whenUserHasAvatar_shouldDeleteFileAndResetUrl() {
         String currentUrl = "https://objectstorage.../current-avatar.png";

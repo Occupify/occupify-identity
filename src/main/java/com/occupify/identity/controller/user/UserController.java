@@ -111,17 +111,6 @@ public class UserController extends AbstractBaseController {
                 return successSingle(response, "Avatar uploaded successfully");
         }
 
-        @GetMapping("/me/avatar")
-        @Operation(summary = "Get current user avatar URL", description = "Retrieves avatar URL of the authenticated user", security = @SecurityRequirement(name = OpenApiConfig.SECURITY_SCHEME_NAME))
-        public SingleResponse<AvatarResponse> getMyAvatar(
-                        @Parameter(description = "Injected user ID from Gateway", hidden = true) @RequestHeader(value = "X-User-Id", required = false) String headerUserId,
-                        HttpServletRequest request) {
-                UUID currentUserId = resolveUserId(headerUserId, request, jwtUtils);
-                log.info("[GET /users/me/avatar] Fetching avatar for user: {}", currentUserId);
-                AvatarResponse response = userService.getMyAvatar(currentUserId);
-                return successSingle(response, "Avatar retrieved successfully");
-        }
-
         @DeleteMapping("/me/avatar")
         @Operation(summary = "Delete current user avatar", description = "Deletes avatar image from storage and resets avatar URL to null", security = @SecurityRequirement(name = OpenApiConfig.SECURITY_SCHEME_NAME))
         public SuccessResponse deleteMyAvatar(

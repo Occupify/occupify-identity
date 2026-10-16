@@ -4,10 +4,9 @@ import com.occupify.identity.dto.request.user.UpdateUserProfileRequest;
 import com.occupify.identity.dto.response.user.AvatarResponse;
 import com.occupify.identity.dto.response.user.UserDetailResponse;
 import com.occupify.identity.dto.response.user.UserProfileResponse;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.UUID;
-
-import org.springframework.web.multipart.MultipartFile;
 
 public interface UserService {
     UserProfileResponse getMyProfile(UUID currentUserId);
@@ -21,8 +20,6 @@ public interface UserService {
     void deleteMyAccount(UUID currentUserId);
 
     AvatarResponse uploadMyAvatar(UUID currentUserId, MultipartFile file);
-
-    AvatarResponse getMyAvatar(UUID currentUserId);
 
     void deleteMyAvatar(UUID currentUserId);
 }
