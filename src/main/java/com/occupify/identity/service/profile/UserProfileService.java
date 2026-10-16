@@ -8,6 +8,7 @@ import com.occupify.identity.dto.request.profile.UpdateEducationRequest;
 import com.occupify.identity.dto.request.profile.UpdateExperienceRequest;
 import com.occupify.identity.dto.request.profile.UpdateQualificationRequest;
 import com.occupify.identity.dto.request.profile.UpdateUserSkillRequest;
+import com.occupify.identity.dto.response.profile.InstitutionResponse;
 import com.occupify.identity.dto.response.profile.SkillResponse;
 import com.occupify.identity.dto.response.user.EducationItemResponse;
 import com.occupify.identity.dto.response.user.ExperienceItemResponse;
@@ -34,4 +35,6 @@ public interface UserProfileService {
     UserSkillItemResponse updateSkill(UUID currentUserId, UUID skillId, UpdateUserSkillRequest request);
     void removeSkill(UUID currentUserId, UUID skillId);
     List<SkillResponse> searchSkills(String keyword);
+
+    List<InstitutionResponse> searchInstitutions(String keyword);
 }

@@ -13,6 +13,7 @@ import com.occupify.identity.dto.request.profile.UpdateEducationRequest;
 import com.occupify.identity.dto.request.profile.UpdateExperienceRequest;
 import com.occupify.identity.dto.request.profile.UpdateQualificationRequest;
 import com.occupify.identity.dto.request.profile.UpdateUserSkillRequest;
+import com.occupify.identity.dto.response.profile.InstitutionResponse;
 import com.occupify.identity.dto.response.profile.SkillResponse;
 import com.occupify.identity.dto.response.user.EducationItemResponse;
 import com.occupify.identity.dto.response.user.ExperienceItemResponse;
@@ -28,8 +29,10 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -103,12 +106,12 @@ public class UserProfileController extends AbstractBaseController {
     // EDUCATIONS
     // =========================================================================
 
-    @PostMapping("/educations")
+    @PostMapping(value = "/educations", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Add education record", description = "Appends a new academic education record to current user's profile", security = @SecurityRequirement(name = OpenApiConfig.SECURITY_SCHEME_NAME))
+    @Operation(summary = "Add education record", description = "Appends a new academic education record with optional proof document (PDF/Image) to current user's profile", security = @SecurityRequirement(name = OpenApiConfig.SECURITY_SCHEME_NAME))
     public CreatedResponse<EducationItemResponse> addEducation(
             @Parameter(description = "Injected user ID from Gateway", hidden = true) @RequestHeader(value = "X-User-Id", required = false) String headerUserId,
-            @Valid @RequestBody CreateEducationRequest request,
+            @Valid @ModelAttribute CreateEducationRequest request,
             HttpServletRequest servletRequest) {
         UUID currentUserId = resolveUserId(headerUserId, servletRequest, jwtUtils);
         log.info("[POST /users/me/educations] Adding education for user: {}", currentUserId);
@@ -116,12 +119,12 @@ public class UserProfileController extends AbstractBaseController {
         return created(response, "Education record created successfully");
     }
 
-    @PutMapping("/educations/{id}")
-    @Operation(summary = "Update education record", description = "Updates an existing education record belonging to the current user", security = @SecurityRequirement(name = OpenApiConfig.SECURITY_SCHEME_NAME))
+    @PutMapping(value = "/educations/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Update education record", description = "Updates an existing education record and optionally replaces or removes proof document", security = @SecurityRequirement(name = OpenApiConfig.SECURITY_SCHEME_NAME))
     public SingleResponse<EducationItemResponse> updateEducation(
             @Parameter(description = "Injected user ID from Gateway", hidden = true) @RequestHeader(value = "X-User-Id", required = false) String headerUserId,
             @PathVariable("id") UUID educationId,
-            @Valid @RequestBody UpdateEducationRequest request,
+            @Valid @ModelAttribute UpdateEducationRequest request,
             HttpServletRequest servletRequest) {
         UUID currentUserId = resolveUserId(headerUserId, servletRequest, jwtUtils);
         log.info("[PUT /users/me/educations/{}] Updating education for user: {}", educationId, currentUserId);
@@ -130,7 +133,7 @@ public class UserProfileController extends AbstractBaseController {
     }
 
     @DeleteMapping("/educations/{id}")
-    @Operation(summary = "Delete education record", description = "Removes an education record from current user's profile", security = @SecurityRequirement(name = OpenApiConfig.SECURITY_SCHEME_NAME))
+    @Operation(summary = "Delete education record", description = "Removes an education record and its associated proof document from current user's profile", security = @SecurityRequirement(name = OpenApiConfig.SECURITY_SCHEME_NAME))
     public SuccessResponse deleteEducation(
             @Parameter(description = "Injected user ID from Gateway", hidden = true) @RequestHeader(value = "X-User-Id", required = false) String headerUserId,
             @PathVariable("id") UUID educationId,
@@ -145,12 +148,12 @@ public class UserProfileController extends AbstractBaseController {
     // QUALIFICATIONS
     // =========================================================================
 
-    @PostMapping("/qualifications")
+    @PostMapping(value = "/qualifications", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Add qualification or certification", description = "Appends a professional certification to current user's profile", security = @SecurityRequirement(name = OpenApiConfig.SECURITY_SCHEME_NAME))
+    @Operation(summary = "Add qualification or certification", description = "Appends a professional certification with optional proof document (PDF/Image) to current user's profile", security = @SecurityRequirement(name = OpenApiConfig.SECURITY_SCHEME_NAME))
     public CreatedResponse<QualificationItemResponse> addQualification(
             @Parameter(description = "Injected user ID from Gateway", hidden = true) @RequestHeader(value = "X-User-Id", required = false) String headerUserId,
-            @Valid @RequestBody CreateQualificationRequest request,
+            @Valid @ModelAttribute CreateQualificationRequest request,
             HttpServletRequest servletRequest) {
         UUID currentUserId = resolveUserId(headerUserId, servletRequest, jwtUtils);
         log.info("[POST /users/me/qualifications] Adding qualification for user: {}", currentUserId);
@@ -158,12 +161,12 @@ public class UserProfileController extends AbstractBaseController {
         return created(response, "Qualification record created successfully");
     }
 
-    @PutMapping("/qualifications/{id}")
-    @Operation(summary = "Update qualification record", description = "Updates an existing qualification record belonging to current user", security = @SecurityRequirement(name = OpenApiConfig.SECURITY_SCHEME_NAME))
+    @PutMapping(value = "/qualifications/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Update qualification record", description = "Updates an existing qualification record and optionally replaces or removes proof document", security = @SecurityRequirement(name = OpenApiConfig.SECURITY_SCHEME_NAME))
     public SingleResponse<QualificationItemResponse> updateQualification(
             @Parameter(description = "Injected user ID from Gateway", hidden = true) @RequestHeader(value = "X-User-Id", required = false) String headerUserId,
             @PathVariable("id") UUID qualificationId,
-            @Valid @RequestBody UpdateQualificationRequest request,
+            @Valid @ModelAttribute UpdateQualificationRequest request,
             HttpServletRequest servletRequest) {
         UUID currentUserId = resolveUserId(headerUserId, servletRequest, jwtUtils);
         log.info("[PUT /users/me/qualifications/{}] Updating qualification for user: {}", qualificationId, currentUserId);
@@ -172,7 +175,7 @@ public class UserProfileController extends AbstractBaseController {
     }
 
     @DeleteMapping("/qualifications/{id}")
-    @Operation(summary = "Delete qualification record", description = "Removes a qualification record from current user's profile", security = @SecurityRequirement(name = OpenApiConfig.SECURITY_SCHEME_NAME))
+    @Operation(summary = "Delete qualification record", description = "Removes a qualification record and its associated proof document from current user's profile", security = @SecurityRequirement(name = OpenApiConfig.SECURITY_SCHEME_NAME))
     public SuccessResponse deleteQualification(
             @Parameter(description = "Injected user ID from Gateway", hidden = true) @RequestHeader(value = "X-User-Id", required = false) String headerUserId,
             @PathVariable("id") UUID qualificationId,
@@ -232,5 +235,14 @@ public class UserProfileController extends AbstractBaseController {
         log.debug("[GET /users/me/skills] Searching skills catalog with keyword: {}", keyword);
         List<SkillResponse> response = userProfileService.searchSkills(keyword);
         return successSingle(response, "Skills retrieved successfully");
+    }
+
+    @GetMapping("/institutions")
+    @Operation(summary = "Search educational institutions catalog", description = "Searches institutions catalog by name substring or retrieves top institutions when keyword is empty", security = @SecurityRequirement(name = OpenApiConfig.SECURITY_SCHEME_NAME))
+    public SingleResponse<List<InstitutionResponse>> searchInstitutions(
+            @Parameter(description = "Keyword to filter institution catalog by name") @RequestParam(value = "keyword", required = false) String keyword) {
+        log.debug("[GET /users/me/institutions] Searching institutions catalog with keyword: {}", keyword);
+        List<InstitutionResponse> response = userProfileService.searchInstitutions(keyword);
+        return successSingle(response, "Institutions retrieved successfully");
     }
 }

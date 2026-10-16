@@ -3,13 +3,16 @@ package com.occupify.identity.dto.request.profile;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.lang.Nullable;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
+import java.util.UUID;
 
 public record UpdateEducationRequest(
-        @NotBlank(message = "Institution is required")
-        @Size(max = 200, message = "Institution must not exceed 200 characters")
-        String institution,
+        @NotNull(message = "Institution ID is required")
+        UUID institutionId,
 
         @NotBlank(message = "Field of study is required")
         @Size(max = 150, message = "Field of study must not exceed 150 characters")
@@ -24,8 +27,16 @@ public record UpdateEducationRequest(
         String description,
 
         @NotNull(message = "Start date is required")
+        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
         LocalDate startDate,
 
-        LocalDate endDate
+        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+        LocalDate endDate,
+
+        @Nullable
+        MultipartFile document,
+
+        @Nullable
+        Boolean removeDocument
 ) {
 }

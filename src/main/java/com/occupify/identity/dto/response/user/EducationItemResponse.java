@@ -6,12 +6,15 @@ import java.util.UUID;
 
 public record EducationItemResponse(
         UUID id,
-        String institution,
+        UUID institutionId,
+        String institutionName,
+        @Nullable String institutionLogoUrl,
         String fieldOfStudy,
         @Nullable String degree,
         @Nullable String grade,
         @Nullable String description,
         LocalDate startDate,
-        @Nullable LocalDate endDate
+        @Nullable LocalDate endDate,
+        @Nullable String documentUrl
 ) {
 }

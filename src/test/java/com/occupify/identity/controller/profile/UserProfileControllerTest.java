@@ -10,6 +10,7 @@ import com.occupify.identity.dto.request.profile.UpdateEducationRequest;
 import com.occupify.identity.dto.request.profile.UpdateExperienceRequest;
 import com.occupify.identity.dto.request.profile.UpdateQualificationRequest;
 import com.occupify.identity.dto.request.profile.UpdateUserSkillRequest;
+import com.occupify.identity.dto.response.profile.InstitutionResponse;
 import com.occupify.identity.dto.response.profile.SkillResponse;
 import com.occupify.identity.dto.response.user.EducationItemResponse;
 import com.occupify.identity.dto.response.user.ExperienceItemResponse;
@@ -27,7 +28,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDate;
@@ -40,6 +43,7 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -206,59 +210,51 @@ class UserProfileControllerTest {
     @DisplayName("POST /users/me/educations -> should return 201 Created with CreatedResponse<EducationItemResponse>")
     void addEducation_success_shouldReturn201Created() throws Exception {
         UUID eduId = UUID.randomUUID();
-        CreateEducationRequest request = new CreateEducationRequest(
-                "Stanford University",
-                "Computer Science",
-                "Master of Science",
-                "3.9 GPA",
-                "Specialized in AI and Cloud Infrastructure",
-                LocalDate.of(2018, 9, 1),
-                LocalDate.of(2020, 6, 15)
-        );
+        UUID instId = UUID.randomUUID();
+        MockMultipartFile docFile = new MockMultipartFile("document", "diploma.pdf", "application/pdf", "dummy pdf".getBytes());
 
         EducationItemResponse responseItem = new EducationItemResponse(
                 eduId,
+                instId,
                 "Stanford University",
+                "https://stanford.edu/logo.png",
                 "Computer Science",
                 "Master of Science",
                 "3.9 GPA",
                 "Specialized in AI and Cloud Infrastructure",
                 LocalDate.of(2018, 9, 1),
-                LocalDate.of(2020, 6, 15)
+                LocalDate.of(2020, 6, 15),
+                "https://s3.amazonaws.com/bucket/doc.pdf"
         );
 
         when(userProfileService.addEducation(eq(testUserId), any(CreateEducationRequest.class)))
                 .thenReturn(responseItem);
 
-        mockMvc.perform(post("/users/me/educations")
+        mockMvc.perform(multipart("/users/me/educations")
+                        .file(docFile)
+                        .param("institutionId", instId.toString())
+                        .param("fieldOfStudy", "Computer Science")
+                        .param("degree", "Master of Science")
+                        .param("grade", "3.9 GPA")
+                        .param("description", "Specialized in AI and Cloud Infrastructure")
+                        .param("startDate", "2018-09-01")
+                        .param("endDate", "2020-06-15")
                         .header("X-User-Id", testUserId.toString())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request))
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.statusCode").value(201))
                 .andExpect(jsonPath("$.data.id").value(eduId.toString()))
-                .andExpect(jsonPath("$.data.institution").value("Stanford University"))
-                .andExpect(jsonPath("$.data.degree").value("Master of Science"));
+                .andExpect(jsonPath("$.data.institutionName").value("Stanford University"))
+                .andExpect(jsonPath("$.data.documentUrl").value("https://s3.amazonaws.com/bucket/doc.pdf"));
     }
 
     @Test
-    @DisplayName("POST /users/me/educations -> should return 400 Bad Request when institution is blank")
+    @DisplayName("POST /users/me/educations -> should return 400 Bad Request when institutionId is missing")
     void addEducation_validationFailure_blankInstitution_shouldReturn400() throws Exception {
-        CreateEducationRequest invalidRequest = new CreateEducationRequest(
-                "", // Blank institution violates @NotBlank
-                "Data Science",
-                "Bachelor",
-                "3.8",
-                "Description",
-                LocalDate.of(2015, 9, 1),
-                LocalDate.of(2019, 6, 1)
-        );
-
-        mockMvc.perform(post("/users/me/educations")
+        mockMvc.perform(multipart("/users/me/educations")
+                        .param("fieldOfStudy", "Data Science")
+                        .param("startDate", "2015-09-01")
                         .header("X-User-Id", testUserId.toString())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(invalidRequest))
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.statusCode").value(400));
@@ -268,34 +264,34 @@ class UserProfileControllerTest {
     @DisplayName("PUT /users/me/educations/{id} -> should return 200 OK with SingleResponse<EducationItemResponse>")
     void updateEducation_success_shouldReturn200() throws Exception {
         UUID eduId = UUID.randomUUID();
-        UpdateEducationRequest request = new UpdateEducationRequest(
-                "Stanford University",
-                "Software Engineering",
-                "Master of Science (Honors)",
-                "4.0 GPA",
-                "Graduated with Distinction",
-                LocalDate.of(2018, 9, 1),
-                LocalDate.of(2020, 6, 15)
-        );
+        UUID instId = UUID.randomUUID();
 
         EducationItemResponse responseItem = new EducationItemResponse(
                 eduId,
+                instId,
                 "Stanford University",
+                "https://stanford.edu/logo.png",
                 "Software Engineering",
                 "Master of Science (Honors)",
                 "4.0 GPA",
                 "Graduated with Distinction",
                 LocalDate.of(2018, 9, 1),
-                LocalDate.of(2020, 6, 15)
+                LocalDate.of(2020, 6, 15),
+                "https://s3.amazonaws.com/bucket/new-doc.pdf"
         );
 
         when(userProfileService.updateEducation(eq(testUserId), eq(eduId), any(UpdateEducationRequest.class)))
                 .thenReturn(responseItem);
 
-        mockMvc.perform(put("/users/me/educations/{id}", eduId)
+        mockMvc.perform(multipart(HttpMethod.PUT, "/users/me/educations/{id}", eduId)
+                        .param("institutionId", instId.toString())
+                        .param("fieldOfStudy", "Software Engineering")
+                        .param("degree", "Master of Science (Honors)")
+                        .param("grade", "4.0 GPA")
+                        .param("description", "Graduated with Distinction")
+                        .param("startDate", "2018-09-01")
+                        .param("endDate", "2020-06-15")
                         .header("X-User-Id", testUserId.toString())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request))
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statusCode").value(200))
@@ -325,14 +321,7 @@ class UserProfileControllerTest {
     @DisplayName("POST /users/me/qualifications -> should return 201 Created with CreatedResponse<QualificationItemResponse>")
     void addQualification_success_shouldReturn201Created() throws Exception {
         UUID qualId = UUID.randomUUID();
-        CreateQualificationRequest request = new CreateQualificationRequest(
-                "AWS Certified Solutions Architect - Professional",
-                "Amazon Web Services",
-                LocalDate.of(2023, 5, 10),
-                LocalDate.of(2026, 5, 10),
-                "AWS-PRO-98765",
-                "https://aws.amazon.com/verification/AWS-PRO-98765"
-        );
+        MockMultipartFile docFile = new MockMultipartFile("document", "cert.pdf", "application/pdf", "dummy cert".getBytes());
 
         QualificationItemResponse responseItem = new QualificationItemResponse(
                 qualId,
@@ -341,40 +330,38 @@ class UserProfileControllerTest {
                 LocalDate.of(2023, 5, 10),
                 LocalDate.of(2026, 5, 10),
                 "AWS-PRO-98765",
-                "https://aws.amazon.com/verification/AWS-PRO-98765"
+                "https://aws.amazon.com/verification/AWS-PRO-98765",
+                "https://s3.amazonaws.com/bucket/cert.pdf"
         );
 
         when(userProfileService.addQualification(eq(testUserId), any(CreateQualificationRequest.class)))
                 .thenReturn(responseItem);
 
-        mockMvc.perform(post("/users/me/qualifications")
+        mockMvc.perform(multipart("/users/me/qualifications")
+                        .file(docFile)
+                        .param("title", "AWS Certified Solutions Architect - Professional")
+                        .param("organization", "Amazon Web Services")
+                        .param("issueDate", "2023-05-10")
+                        .param("expirationDate", "2026-05-10")
+                        .param("credentialId", "AWS-PRO-98765")
+                        .param("credentialUrl", "https://aws.amazon.com/verification/AWS-PRO-98765")
                         .header("X-User-Id", testUserId.toString())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request))
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.statusCode").value(201))
                 .andExpect(jsonPath("$.data.id").value(qualId.toString()))
                 .andExpect(jsonPath("$.data.title").value("AWS Certified Solutions Architect - Professional"))
-                .andExpect(jsonPath("$.data.organization").value("Amazon Web Services"));
+                .andExpect(jsonPath("$.data.documentUrl").value("https://s3.amazonaws.com/bucket/cert.pdf"));
     }
 
     @Test
     @DisplayName("POST /users/me/qualifications -> should return 400 Bad Request when title is blank")
     void addQualification_validationFailure_blankTitle_shouldReturn400() throws Exception {
-        CreateQualificationRequest invalidRequest = new CreateQualificationRequest(
-                "", // Blank title violates @NotBlank
-                "AWS",
-                LocalDate.of(2023, 1, 1),
-                null,
-                "ID123",
-                "https://verify.url"
-        );
-
-        mockMvc.perform(post("/users/me/qualifications")
+        mockMvc.perform(multipart("/users/me/qualifications")
+                        .param("title", "")
+                        .param("organization", "AWS")
+                        .param("issueDate", "2023-01-01")
                         .header("X-User-Id", testUserId.toString())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(invalidRequest))
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.statusCode").value(400));
@@ -384,14 +371,6 @@ class UserProfileControllerTest {
     @DisplayName("PUT /users/me/qualifications/{id} -> should return 200 OK with SingleResponse<QualificationItemResponse>")
     void updateQualification_success_shouldReturn200() throws Exception {
         UUID qualId = UUID.randomUUID();
-        UpdateQualificationRequest request = new UpdateQualificationRequest(
-                "AWS Certified Solutions Architect - Professional (Renewed)",
-                "Amazon Web Services",
-                LocalDate.of(2023, 5, 10),
-                LocalDate.of(2029, 5, 10),
-                "AWS-PRO-98765-V2",
-                "https://aws.amazon.com/verification/AWS-PRO-98765-V2"
-        );
 
         QualificationItemResponse responseItem = new QualificationItemResponse(
                 qualId,
@@ -400,16 +379,21 @@ class UserProfileControllerTest {
                 LocalDate.of(2023, 5, 10),
                 LocalDate.of(2029, 5, 10),
                 "AWS-PRO-98765-V2",
-                "https://aws.amazon.com/verification/AWS-PRO-98765-V2"
+                "https://aws.amazon.com/verification/AWS-PRO-98765-V2",
+                "https://s3.amazonaws.com/bucket/new-cert.pdf"
         );
 
         when(userProfileService.updateQualification(eq(testUserId), eq(qualId), any(UpdateQualificationRequest.class)))
                 .thenReturn(responseItem);
 
-        mockMvc.perform(put("/users/me/qualifications/{id}", qualId)
+        mockMvc.perform(multipart(HttpMethod.PUT, "/users/me/qualifications/{id}", qualId)
+                        .param("title", "AWS Certified Solutions Architect - Professional (Renewed)")
+                        .param("organization", "Amazon Web Services")
+                        .param("issueDate", "2023-05-10")
+                        .param("expirationDate", "2029-05-10")
+                        .param("credentialId", "AWS-PRO-98765-V2")
+                        .param("credentialUrl", "https://aws.amazon.com/verification/AWS-PRO-98765-V2")
                         .header("X-User-Id", testUserId.toString())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request))
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statusCode").value(200))
@@ -540,5 +524,28 @@ class UserProfileControllerTest {
                 .andExpect(jsonPath("$.data").isArray())
                 .andExpect(jsonPath("$.data[0].name").value("Spring Boot"))
                 .andExpect(jsonPath("$.data[1].name").value("Spring Cloud"));
+    }
+
+    @Test
+    @DisplayName("GET /users/me/institutions -> should return 200 OK with SingleResponse<List<InstitutionResponse>>")
+    void searchInstitutions_success_shouldReturn200AndInstitutionList() throws Exception {
+        UUID instId1 = UUID.randomUUID();
+        UUID instId2 = UUID.randomUUID();
+        List<InstitutionResponse> mockList = List.of(
+                new InstitutionResponse(instId1, "Hanoi University of Science and Technology", "HUST", "Vietnam", "Hanoi", "https://hust.edu.vn", "https://logo.com/hust.png"),
+                new InstitutionResponse(instId2, "Vietnam National University - UET", "UET", "Vietnam", "Hanoi", "https://uet.vnu.edu.vn", "https://logo.com/uet.png")
+        );
+
+        when(userProfileService.searchInstitutions("tech")).thenReturn(mockList);
+
+        mockMvc.perform(get("/users/me/institutions")
+                        .param("keyword", "tech")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statusCode").value(200))
+                .andExpect(jsonPath("$.data").isArray())
+                .andExpect(jsonPath("$.data[0].name").value("Hanoi University of Science and Technology"))
+                .andExpect(jsonPath("$.data[0].code").value("HUST"))
+                .andExpect(jsonPath("$.data[1].name").value("Vietnam National University - UET"));
     }
 }

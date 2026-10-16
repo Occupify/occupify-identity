@@ -1,5 +1,6 @@
 package com.occupify.identity.service.profile.impl;
 
+import com.occupify.identity.constant.StorageConstants;
 import com.occupify.identity.dto.request.profile.AddUserSkillRequest;
 import com.occupify.identity.dto.request.profile.CreateEducationRequest;
 import com.occupify.identity.dto.request.profile.CreateExperienceRequest;
@@ -8,6 +9,7 @@ import com.occupify.identity.dto.request.profile.UpdateEducationRequest;
 import com.occupify.identity.dto.request.profile.UpdateExperienceRequest;
 import com.occupify.identity.dto.request.profile.UpdateQualificationRequest;
 import com.occupify.identity.dto.request.profile.UpdateUserSkillRequest;
+import com.occupify.identity.dto.response.profile.InstitutionResponse;
 import com.occupify.identity.dto.response.profile.SkillResponse;
 import com.occupify.identity.dto.response.user.EducationItemResponse;
 import com.occupify.identity.dto.response.user.ExperienceItemResponse;
@@ -15,6 +17,7 @@ import com.occupify.identity.dto.response.user.QualificationItemResponse;
 import com.occupify.identity.dto.response.user.UserSkillItemResponse;
 import com.occupify.identity.entity.Education;
 import com.occupify.identity.entity.Experience;
+import com.occupify.identity.entity.Institution;
 import com.occupify.identity.entity.Qualification;
 import com.occupify.identity.entity.Skill;
 import com.occupify.identity.entity.SkillUser;
@@ -27,11 +30,13 @@ import com.occupify.identity.exception.user.UserException;
 import com.occupify.identity.mapper.UserProfileMapper;
 import com.occupify.identity.repository.EducationRepository;
 import com.occupify.identity.repository.ExperienceRepository;
+import com.occupify.identity.repository.InstitutionRepository;
 import com.occupify.identity.repository.QualificationRepository;
 import com.occupify.identity.repository.SkillRepository;
 import com.occupify.identity.repository.SkillUserRepository;
 import com.occupify.identity.repository.UserRepository;
 import com.occupify.identity.service.profile.UserProfileService;
+import com.occupify.identity.service.storage.StorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -52,6 +57,8 @@ public class UserProfileServiceImpl implements UserProfileService {
     private final QualificationRepository qualificationRepository;
     private final SkillRepository skillRepository;
     private final SkillUserRepository skillUserRepository;
+    private final InstitutionRepository institutionRepository;
+    private final StorageService storageService;
     private final UserProfileMapper userProfileMapper;
 
     // =========================================================================
@@ -138,16 +145,25 @@ public class UserProfileServiceImpl implements UserProfileService {
             throw new ProfileException(ProfileErrorCode.INVALID_DATE_RANGE, "End date cannot be earlier than start date");
         }
 
+        Institution institution = institutionRepository.findById(request.institutionId())
+                .orElseThrow(() -> new ProfileException(ProfileErrorCode.INSTITUTION_NOT_FOUND, "Educational institution not found with id: " + request.institutionId()));
+
+        String documentUrl = null;
+        if (request.document() != null && !request.document().isEmpty()) {
+            documentUrl = storageService.uploadDocument(StorageConstants.getEducationDocumentPath(currentUserId), request.document());
+        }
+
         Education education = new Education(
                 UUID.randomUUID(),
                 user,
-                request.institution(),
+                institution,
                 request.fieldOfStudy(),
                 request.degree(),
                 request.grade(),
                 request.description(),
                 request.startDate(),
-                request.endDate()
+                request.endDate(),
+                documentUrl
         );
 
         Education saved = educationRepository.save(education);
@@ -166,13 +182,30 @@ public class UserProfileServiceImpl implements UserProfileService {
             throw new ProfileException(ProfileErrorCode.INVALID_DATE_RANGE, "End date cannot be earlier than start date");
         }
 
-        education.setInstitution(request.institution());
+        Institution institution = institutionRepository.findById(request.institutionId())
+                .orElseThrow(() -> new ProfileException(ProfileErrorCode.INSTITUTION_NOT_FOUND, "Educational institution not found with id: " + request.institutionId()));
+
+        education.setInstitution(institution);
         education.setFieldOfStudy(request.fieldOfStudy());
         education.setDegree(request.degree());
         education.setGrade(request.grade());
         education.setDescription(request.description());
         education.setStartDate(request.startDate());
         education.setEndDate(request.endDate());
+
+        // Handle document lifecycle
+        if (request.document() != null && !request.document().isEmpty()) {
+            if (education.getDocumentUrl() != null) {
+                storageService.deleteFile(education.getDocumentUrl());
+            }
+            String newDocumentUrl = storageService.uploadDocument(StorageConstants.getEducationDocumentPath(currentUserId), request.document());
+            education.setDocumentUrl(newDocumentUrl);
+        } else if (Boolean.TRUE.equals(request.removeDocument())) {
+            if (education.getDocumentUrl() != null) {
+                storageService.deleteFile(education.getDocumentUrl());
+                education.setDocumentUrl(null);
+            }
+        }
 
         Education updated = educationRepository.save(education);
         log.info("Updated education id: {} for userId: {}", educationId, currentUserId);
@@ -185,6 +218,10 @@ public class UserProfileServiceImpl implements UserProfileService {
         log.warn("Deleting education id: {} for userId: {}", educationId, currentUserId);
         Education education = educationRepository.findByIdAndUserId(educationId, currentUserId)
                 .orElseThrow(() -> new ProfileException(ProfileErrorCode.EDUCATION_NOT_FOUND, "Education record not found"));
+
+        if (education.getDocumentUrl() != null) {
+            storageService.deleteFile(education.getDocumentUrl());
+        }
 
         educationRepository.delete(education);
         log.info("Deleted education id: {} for userId: {}", educationId, currentUserId);
@@ -204,6 +241,11 @@ public class UserProfileServiceImpl implements UserProfileService {
             throw new ProfileException(ProfileErrorCode.INVALID_DATE_RANGE, "Expiration date cannot be earlier than issue date");
         }
 
+        String documentUrl = null;
+        if (request.document() != null && !request.document().isEmpty()) {
+            documentUrl = storageService.uploadDocument(StorageConstants.getQualificationDocumentPath(currentUserId), request.document());
+        }
+
         Qualification qualification = new Qualification(
                 UUID.randomUUID(),
                 user,
@@ -212,7 +254,8 @@ public class UserProfileServiceImpl implements UserProfileService {
                 request.issueDate(),
                 request.expirationDate(),
                 request.credentialId(),
-                request.credentialUrl()
+                request.credentialUrl(),
+                documentUrl
         );
 
         Qualification saved = qualificationRepository.save(qualification);
@@ -238,6 +281,20 @@ public class UserProfileServiceImpl implements UserProfileService {
         qualification.setCredentialId(request.credentialId());
         qualification.setCredentialUrl(request.credentialUrl());
 
+        // Handle document lifecycle
+        if (request.document() != null && !request.document().isEmpty()) {
+            if (qualification.getDocumentUrl() != null) {
+                storageService.deleteFile(qualification.getDocumentUrl());
+            }
+            String newDocumentUrl = storageService.uploadDocument(StorageConstants.getQualificationDocumentPath(currentUserId), request.document());
+            qualification.setDocumentUrl(newDocumentUrl);
+        } else if (Boolean.TRUE.equals(request.removeDocument())) {
+            if (qualification.getDocumentUrl() != null) {
+                storageService.deleteFile(qualification.getDocumentUrl());
+                qualification.setDocumentUrl(null);
+            }
+        }
+
         Qualification updated = qualificationRepository.save(qualification);
         log.info("Updated qualification id: {} for userId: {}", qualificationId, currentUserId);
         return userProfileMapper.toQualificationResponse(updated);
@@ -249,6 +306,10 @@ public class UserProfileServiceImpl implements UserProfileService {
         log.warn("Deleting qualification id: {} for userId: {}", qualificationId, currentUserId);
         Qualification qualification = qualificationRepository.findByIdAndUserId(qualificationId, currentUserId)
                 .orElseThrow(() -> new ProfileException(ProfileErrorCode.QUALIFICATION_NOT_FOUND, "Qualification record not found"));
+
+        if (qualification.getDocumentUrl() != null) {
+            storageService.deleteFile(qualification.getDocumentUrl());
+        }
 
         qualificationRepository.delete(qualification);
         log.info("Deleted qualification id: {} for userId: {}", qualificationId, currentUserId);
@@ -321,6 +382,21 @@ public class UserProfileServiceImpl implements UserProfileService {
         }
         return skills.stream()
                 .map(userProfileMapper::toSkillResponse)
+                .toList();
+    }
+
+    @Override
+    public List<InstitutionResponse> searchInstitutions(String keyword) {
+        log.debug("Searching institutions catalog with keyword: {}", keyword);
+        if (keyword != null && !keyword.trim().isBlank()) {
+            return institutionRepository.findByNameContainingIgnoreCaseOrderByNameAsc(keyword.trim())
+                    .stream()
+                    .map(userProfileMapper::toInstitutionResponse)
+                    .toList();
+        }
+        return institutionRepository.findTop20ByOrderByNameAsc()
+                .stream()
+                .map(userProfileMapper::toInstitutionResponse)
                 .toList();
     }
 

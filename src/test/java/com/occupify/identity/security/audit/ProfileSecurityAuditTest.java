@@ -145,13 +145,15 @@ class ProfileSecurityAuditTest {
         void attackerCannotUpdateVictimEducation() {
             UUID victimEducationId = UUID.randomUUID();
             UpdateEducationRequest maliciousUpdate = new UpdateEducationRequest(
-                    "Fake University",
+                    UUID.randomUUID(),
                     "Fake Field",
                     "Fake Degree",
                     "4.0",
                     "Tampered",
                     LocalDate.of(2020, 1, 1),
-                    LocalDate.of(2024, 1, 1)
+                    LocalDate.of(2024, 1, 1),
+                    null,
+                    false
             );
 
             when(educationRepository.findByIdAndUserId(victimEducationId, attackerUserBId))
@@ -191,7 +193,9 @@ class ProfileSecurityAuditTest {
                     LocalDate.of(2023, 1, 1),
                     null,
                     "FAKE-ID",
-                    "https://fake.url"
+                    "https://fake.url",
+                    null,
+                    false
             );
 
             when(qualificationRepository.findByIdAndUserId(victimQualificationId, attackerUserBId))

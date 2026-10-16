@@ -11,6 +11,7 @@ public record QualificationItemResponse(
         LocalDate issueDate,
         @Nullable LocalDate expirationDate,
         @Nullable String credentialId,
-        @Nullable String credentialUrl
+        @Nullable String credentialUrl,
+        @Nullable String documentUrl
 ) {
 }

@@ -34,6 +34,10 @@ import com.occupify.identity.repository.SkillRepository;
 import com.occupify.identity.repository.SkillUserRepository;
 import com.occupify.identity.repository.UserRepository;
 import com.occupify.identity.service.profile.impl.UserProfileServiceImpl;
+import com.occupify.identity.dto.response.profile.InstitutionResponse;
+import com.occupify.identity.entity.Institution;
+import com.occupify.identity.repository.InstitutionRepository;
+import com.occupify.identity.service.storage.StorageService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -42,6 +46,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mock.web.MockMultipartFile;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -52,7 +57,9 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -77,6 +84,12 @@ class UserProfileServiceTest {
 
     @Mock
     private SkillUserRepository skillUserRepository;
+
+    @Mock
+    private InstitutionRepository institutionRepository;
+
+    @Mock
+    private StorageService storageService;
 
     @Spy
     private UserProfileMapper userProfileMapper = new UserProfileMapper();
@@ -229,48 +242,164 @@ class UserProfileServiceTest {
     // =========================================================================
 
     @Test
-    @DisplayName("addEducation -> saves and returns EducationItemResponse")
+    @DisplayName("addEducation -> saves and returns EducationItemResponse with institution relation")
     void addEducation_success() {
+        UUID instId = UUID.randomUUID();
+        Institution institution = new Institution(instId, "MIT", "MIT", "USA", "Cambridge", "https://mit.edu", null, true);
+
         CreateEducationRequest request = new CreateEducationRequest(
-                "MIT",
+                instId,
                 "Computer Science",
                 "Bachelor of Science",
                 "4.0",
                 "Graduated top of class",
                 LocalDate.of(2016, 9, 1),
-                LocalDate.of(2020, 6, 1)
+                LocalDate.of(2020, 6, 1),
+                null
         );
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(activeUser));
+        when(institutionRepository.findById(instId)).thenReturn(Optional.of(institution));
         when(educationRepository.save(any(Education.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         EducationItemResponse response = userProfileService.addEducation(userId, request);
 
         assertThat(response).isNotNull();
-        assertThat(response.institution()).isEqualTo("MIT");
+        assertThat(response.institutionId()).isEqualTo(instId);
+        assertThat(response.institutionName()).isEqualTo("MIT");
         assertThat(response.fieldOfStudy()).isEqualTo("Computer Science");
+        assertThat(response.documentUrl()).isNull();
     }
 
     @Test
-    @DisplayName("deleteEducation -> deletes education when found")
-    void deleteEducation_success() {
+    @DisplayName("addEducation -> with document file uploads to storage and stores documentUrl")
+    void addEducation_withDocument_uploadsToStorage() {
+        UUID instId = UUID.randomUUID();
+        Institution institution = new Institution(instId, "MIT", "MIT", "USA", "Cambridge", "https://mit.edu", null, true);
+        MockMultipartFile docFile = new MockMultipartFile("document", "diploma.pdf", "application/pdf", "dummy pdf".getBytes());
+
+        CreateEducationRequest request = new CreateEducationRequest(
+                instId,
+                "Computer Science",
+                "Bachelor of Science",
+                "4.0",
+                "Graduated top of class",
+                LocalDate.of(2016, 9, 1),
+                LocalDate.of(2020, 6, 1),
+                docFile
+        );
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(activeUser));
+        when(institutionRepository.findById(instId)).thenReturn(Optional.of(institution));
+        when(storageService.uploadDocument(eq("educations/" + userId), eq(docFile)))
+                .thenReturn("https://s3.amazonaws.com/bucket/educations/" + userId + "/doc.pdf");
+        when(educationRepository.save(any(Education.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        EducationItemResponse response = userProfileService.addEducation(userId, request);
+
+        assertThat(response).isNotNull();
+        assertThat(response.documentUrl()).isEqualTo("https://s3.amazonaws.com/bucket/educations/" + userId + "/doc.pdf");
+        verify(storageService).uploadDocument(eq("educations/" + userId), eq(docFile));
+    }
+
+    @Test
+    @DisplayName("addEducation -> throws INSTITUTION_NOT_FOUND when institutionId does not exist")
+    void addEducation_institutionNotFound_throwsException() {
+        UUID instId = UUID.randomUUID();
+        CreateEducationRequest request = new CreateEducationRequest(
+                instId,
+                "Computer Science",
+                "Bachelor of Science",
+                "4.0",
+                "Desc",
+                LocalDate.of(2016, 9, 1),
+                LocalDate.of(2020, 6, 1),
+                null
+        );
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(activeUser));
+        when(institutionRepository.findById(instId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> userProfileService.addEducation(userId, request))
+                .isInstanceOf(ProfileException.class)
+                .extracting("errorCode")
+                .isEqualTo(ProfileErrorCode.INSTITUTION_NOT_FOUND);
+
+        verify(educationRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("updateEducation -> with new document deletes old document from storage and saves new URL")
+    void updateEducation_withNewDocument_deletesOldDocumentAndUploadsNew() {
         UUID eduId = UUID.randomUUID();
+        UUID instId = UUID.randomUUID();
+        Institution institution = new Institution(instId, "MIT", "MIT", "USA", "Cambridge", "https://mit.edu", null, true);
+
         Education existing = new Education(
                 eduId,
                 activeUser,
-                "MIT",
+                institution,
                 "CS",
                 "BSc",
                 "4.0",
                 "Desc",
                 LocalDate.of(2016, 9, 1),
-                LocalDate.of(2020, 6, 1)
+                LocalDate.of(2020, 6, 1),
+                "https://s3.amazonaws.com/bucket/old-diploma.pdf"
+        );
+
+        MockMultipartFile newFile = new MockMultipartFile("document", "new-diploma.pdf", "application/pdf", "new content".getBytes());
+        UpdateEducationRequest updateRequest = new UpdateEducationRequest(
+                instId,
+                "Advanced CS",
+                "MSc",
+                "4.0",
+                "Updated",
+                LocalDate.of(2016, 9, 1),
+                LocalDate.of(2020, 6, 1),
+                newFile,
+                false
+        );
+
+        when(educationRepository.findByIdAndUserId(eduId, userId)).thenReturn(Optional.of(existing));
+        when(institutionRepository.findById(instId)).thenReturn(Optional.of(institution));
+        when(storageService.uploadDocument(eq("educations/" + userId), eq(newFile)))
+                .thenReturn("https://s3.amazonaws.com/bucket/new-diploma.pdf");
+        when(educationRepository.save(existing)).thenReturn(existing);
+
+        EducationItemResponse response = userProfileService.updateEducation(userId, eduId, updateRequest);
+
+        assertThat(response).isNotNull();
+        assertThat(response.documentUrl()).isEqualTo("https://s3.amazonaws.com/bucket/new-diploma.pdf");
+        verify(storageService).deleteFile("https://s3.amazonaws.com/bucket/old-diploma.pdf");
+        verify(storageService).uploadDocument(eq("educations/" + userId), eq(newFile));
+    }
+
+    @Test
+    @DisplayName("deleteEducation -> deletes education and removes proof document from storage")
+    void deleteEducation_success() {
+        UUID eduId = UUID.randomUUID();
+        UUID instId = UUID.randomUUID();
+        Institution institution = new Institution(instId, "MIT", "MIT", "USA", "Cambridge", "https://mit.edu", null, true);
+
+        Education existing = new Education(
+                eduId,
+                activeUser,
+                institution,
+                "CS",
+                "BSc",
+                "4.0",
+                "Desc",
+                LocalDate.of(2016, 9, 1),
+                LocalDate.of(2020, 6, 1),
+                "https://s3.amazonaws.com/bucket/diploma.pdf"
         );
 
         when(educationRepository.findByIdAndUserId(eduId, userId)).thenReturn(Optional.of(existing));
 
         userProfileService.deleteEducation(userId, eduId);
 
+        verify(storageService).deleteFile("https://s3.amazonaws.com/bucket/diploma.pdf");
         verify(educationRepository).delete(existing);
     }
 
@@ -287,7 +416,8 @@ class UserProfileServiceTest {
                 LocalDate.of(2023, 1, 1),
                 LocalDate.of(2026, 1, 1),
                 "CKA-12345",
-                "https://cncf.io/verify"
+                "https://cncf.io/verify",
+                null
         );
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(activeUser));
@@ -298,6 +428,97 @@ class UserProfileServiceTest {
         assertThat(response).isNotNull();
         assertThat(response.title()).isEqualTo("CKA: Certified Kubernetes Administrator");
         assertThat(response.organization()).isEqualTo("CNCF");
+        assertThat(response.documentUrl()).isNull();
+    }
+
+    @Test
+    @DisplayName("addQualification -> with document uploads to storage")
+    void addQualification_withDocument_uploadsToStorage() {
+        MockMultipartFile docFile = new MockMultipartFile("document", "cka.pdf", "application/pdf", "dummy pdf".getBytes());
+        CreateQualificationRequest request = new CreateQualificationRequest(
+                "CKA: Certified Kubernetes Administrator",
+                "CNCF",
+                LocalDate.of(2023, 1, 1),
+                LocalDate.of(2026, 1, 1),
+                "CKA-12345",
+                "https://cncf.io/verify",
+                docFile
+        );
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(activeUser));
+        when(storageService.uploadDocument(eq("certificates/" + userId), eq(docFile)))
+                .thenReturn("https://s3.amazonaws.com/bucket/certificates/" + userId + "/cka.pdf");
+        when(qualificationRepository.save(any(Qualification.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        QualificationItemResponse response = userProfileService.addQualification(userId, request);
+
+        assertThat(response).isNotNull();
+        assertThat(response.documentUrl()).isEqualTo("https://s3.amazonaws.com/bucket/certificates/" + userId + "/cka.pdf");
+        verify(storageService).uploadDocument(eq("certificates/" + userId), eq(docFile));
+    }
+
+    @Test
+    @DisplayName("updateQualification -> with new document deletes old document from storage")
+    void updateQualification_withNewDocument_deletesOldDocument() {
+        UUID qualId = UUID.randomUUID();
+        Qualification existing = new Qualification(
+                qualId,
+                activeUser,
+                "CKA",
+                "CNCF",
+                LocalDate.of(2023, 1, 1),
+                LocalDate.of(2026, 1, 1),
+                "ID-123",
+                "https://verify.url",
+                "https://s3.amazonaws.com/bucket/old-cert.pdf"
+        );
+
+        MockMultipartFile newFile = new MockMultipartFile("document", "new-cert.pdf", "application/pdf", "content".getBytes());
+        UpdateQualificationRequest request = new UpdateQualificationRequest(
+                "CKA Updated",
+                "CNCF",
+                LocalDate.of(2023, 1, 1),
+                LocalDate.of(2026, 1, 1),
+                "ID-123",
+                "https://verify.url",
+                newFile,
+                false
+        );
+
+        when(qualificationRepository.findByIdAndUserId(qualId, userId)).thenReturn(Optional.of(existing));
+        when(storageService.uploadDocument(eq("certificates/" + userId), eq(newFile)))
+                .thenReturn("https://s3.amazonaws.com/bucket/new-cert.pdf");
+        when(qualificationRepository.save(existing)).thenReturn(existing);
+
+        QualificationItemResponse response = userProfileService.updateQualification(userId, qualId, request);
+
+        assertThat(response).isNotNull();
+        assertThat(response.documentUrl()).isEqualTo("https://s3.amazonaws.com/bucket/new-cert.pdf");
+        verify(storageService).deleteFile("https://s3.amazonaws.com/bucket/old-cert.pdf");
+    }
+
+    @Test
+    @DisplayName("deleteQualification -> deletes qualification and removes proof document from storage")
+    void deleteQualification_success() {
+        UUID qualId = UUID.randomUUID();
+        Qualification existing = new Qualification(
+                qualId,
+                activeUser,
+                "CKA",
+                "CNCF",
+                LocalDate.of(2023, 1, 1),
+                LocalDate.of(2026, 1, 1),
+                "ID-123",
+                "https://verify.url",
+                "https://s3.amazonaws.com/bucket/cert.pdf"
+        );
+
+        when(qualificationRepository.findByIdAndUserId(qualId, userId)).thenReturn(Optional.of(existing));
+
+        userProfileService.deleteQualification(userId, qualId);
+
+        verify(storageService).deleteFile("https://s3.amazonaws.com/bucket/cert.pdf");
+        verify(qualificationRepository).delete(existing);
     }
 
     // =========================================================================
@@ -431,5 +652,21 @@ class UserProfileServiceTest {
 
         assertThat(responses).hasSize(2);
         assertThat(responses.get(0).name()).isEqualTo("Spring Boot");
+    }
+
+    @Test
+    @DisplayName("searchInstitutions -> returns matching institutions from catalog")
+    void searchInstitutions_success() {
+        List<Institution> institutions = List.of(
+                new Institution(UUID.randomUUID(), "HUST", "HUST", "Vietnam", "Hanoi", "https://hust.edu.vn", null, true),
+                new Institution(UUID.randomUUID(), "HCMUT", "HCMUT", "Vietnam", "Ho Chi Minh City", "https://hcmut.edu.vn", null, true)
+        );
+
+        when(institutionRepository.findByNameContainingIgnoreCaseOrderByNameAsc("hust")).thenReturn(List.of(institutions.get(0)));
+
+        List<InstitutionResponse> responses = userProfileService.searchInstitutions("hust");
+
+        assertThat(responses).hasSize(1);
+        assertThat(responses.get(0).name()).isEqualTo("HUST");
     }
 }
