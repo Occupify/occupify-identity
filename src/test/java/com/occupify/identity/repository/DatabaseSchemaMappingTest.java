@@ -3,6 +3,7 @@ package com.occupify.identity.repository;
 import com.occupify.identity.entity.Contract;
 import com.occupify.identity.entity.Education;
 import com.occupify.identity.entity.Experience;
+import com.occupify.identity.entity.Institution;
 import com.occupify.identity.entity.Qualification;
 import com.occupify.identity.entity.Review;
 import com.occupify.identity.entity.Skill;
@@ -82,6 +83,9 @@ class DatabaseSchemaMappingTest {
     @Autowired
     private ReviewRepository reviewRepository;
 
+    @Autowired
+    private InstitutionRepository institutionRepository;
+
     // ==========================================================================================
     // HELPER METHODS
     // ==========================================================================================
@@ -95,6 +99,20 @@ class DatabaseSchemaMappingTest {
         user.setRole(role.name());
         user.setStatus(UserStatus.ACTIVE.name());
         return userRepository.save(user);
+    }
+
+    private Institution createTestInstitution(String name) {
+        Institution institution = new Institution(
+                null,
+                name,
+                "INST",
+                "Vietnam",
+                "Danang",
+                "https://institution.edu.vn",
+                null,
+                true
+        );
+        return institutionRepository.save(institution);
     }
 
     // ==========================================================================================
@@ -177,16 +195,18 @@ class DatabaseSchemaMappingTest {
         experience = experienceRepository.save(experience);
 
         // [ACT 2 - Thêm Học vấn (Education)]
+        Institution dutInstitution = createTestInstitution("Danang University of Technology");
         Education education = new Education(
                 null,
                 freelancer,
-                "Danang University of Technology",
+                dutInstitution,
                 "Software Engineering",
                 "Bachelor of Science",
                 "3.85 / 4.0",
                 "Thesis: Building resilient event-driven microservices with RabbitMQ.",
                 LocalDate.of(2017, 9, 1),
-                LocalDate.of(2021, 6, 30)
+                LocalDate.of(2021, 6, 30),
+                "https://s3.../diploma.pdf"
         );
         education = educationRepository.save(education);
 
@@ -199,7 +219,8 @@ class DatabaseSchemaMappingTest {
                 LocalDate.of(2023, 4, 10),
                 LocalDate.of(2026, 4, 10),
                 "AWS-SAA-12345678",
-                "https://www.credly.com/badges/sample-aws-cert"
+                "https://www.credly.com/badges/sample-aws-cert",
+                "https://s3.../aws-cert.pdf"
         );
         qualification = qualificationRepository.save(qualification);
 
@@ -221,10 +242,11 @@ class DatabaseSchemaMappingTest {
         // Kiểm tra thông tin Education
         List<Education> educations = educationRepository.findByUserIdOrderByStartDateDesc(freelancer.getId());
         assertThat(educations).hasSize(1);
-        assertThat(educations.get(0).getInstitution()).isEqualTo("Danang University of Technology");
+        assertThat(educations.get(0).getInstitution().getName()).isEqualTo("Danang University of Technology");
         assertThat(educations.get(0).getDegree()).isEqualTo("Bachelor of Science");
         assertThat(educations.get(0).getGrade()).isEqualTo("3.85 / 4.0");
         assertThat(educations.get(0).getDescription()).contains("resilient event-driven microservices");
+        assertThat(educations.get(0).getDocumentUrl()).isEqualTo("https://s3.../diploma.pdf");
 
         // Kiểm tra thông tin Qualification
         List<Qualification> qualifications = qualificationRepository.findByUserIdOrderByIssueDateDesc(freelancer.getId());
@@ -234,6 +256,7 @@ class DatabaseSchemaMappingTest {
         assertThat(qualifications.get(0).getExpirationDate()).isEqualTo(LocalDate.of(2026, 4, 10));
         assertThat(qualifications.get(0).getCredentialId()).isEqualTo("AWS-SAA-12345678");
         assertThat(qualifications.get(0).getCredentialUrl()).isEqualTo("https://www.credly.com/badges/sample-aws-cert");
+        assertThat(qualifications.get(0).getDocumentUrl()).isEqualTo("https://s3.../aws-cert.pdf");
     }
 
     /**
@@ -411,16 +434,18 @@ class DatabaseSchemaMappingTest {
         assertThat(experiences.get(0).getTitle()).isEqualTo("Senior Backend Developer");
         assertThat(experiences.get(0).getOrganization()).isEqualTo("Tech Pioneers Co");
 
+        Institution vnuInstitution = createTestInstitution("VNU University");
         Education education = new Education(
                 null,
                 employee,
-                "VNU University",
+                vnuInstitution,
                 "Computer Science",
                 "Bachelor of Engineering",
                 "3.9 / 4.0",
                 "Excellent graduation project in distributed caching systems",
                 LocalDate.of(2018, 9, 1),
-                LocalDate.of(2022, 6, 30)
+                LocalDate.of(2022, 6, 30),
+                null
         );
         education = educationRepository.save(education);
         assertThat(education.getId()).isNotNull();
@@ -433,7 +458,8 @@ class DatabaseSchemaMappingTest {
                 LocalDate.of(2023, 5, 1),
                 LocalDate.of(2026, 5, 1),
                 "AWS-SAA-998877",
-                "https://aws.amazon.com/verification"
+                "https://aws.amazon.com/verification",
+                null
         );
         qualification = qualificationRepository.save(qualification);
         assertThat(qualification.getId()).isNotNull();

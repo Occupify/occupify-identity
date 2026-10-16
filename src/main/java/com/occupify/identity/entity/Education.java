@@ -36,8 +36,9 @@ public class Education {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @Column(name = "institution", nullable = false, length = 200)
-    private String institution;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "institution_id", nullable = false)
+    private Institution institution;
 
     @Column(name = "field_of_study", nullable = false, length = 150)
     private String fieldOfStudy;
@@ -57,6 +58,9 @@ public class Education {
     @Column(name = "end_date")
     private LocalDate endDate;
 
+    @Column(name = "document_url", length = 500)
+    private String documentUrl;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -65,9 +69,9 @@ public class Education {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    public Education(UUID id, User user, String institution, String fieldOfStudy,
+    public Education(UUID id, User user, Institution institution, String fieldOfStudy,
                      String degree, String grade, String description,
-                     LocalDate startDate, LocalDate endDate) {
+                     LocalDate startDate, LocalDate endDate, String documentUrl) {
         this.id = id;
         this.user = user;
         this.institution = institution;
@@ -77,6 +81,7 @@ public class Education {
         this.description = description;
         this.startDate = startDate;
         this.endDate = endDate;
+        this.documentUrl = documentUrl;
     }
 
     @Override

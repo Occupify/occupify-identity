@@ -54,6 +54,9 @@ public class Qualification {
     @Column(name = "credential_url", length = 500)
     private String credentialUrl;
 
+    @Column(name = "document_url", length = 500)
+    private String documentUrl;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -64,7 +67,7 @@ public class Qualification {
 
     public Qualification(UUID id, User user, String title, String organization,
                          LocalDate issueDate, LocalDate expirationDate,
-                         String credentialId, String credentialUrl) {
+                         String credentialId, String credentialUrl, String documentUrl) {
         this.id = id;
         this.user = user;
         this.title = title;
@@ -73,6 +76,7 @@ public class Qualification {
         this.expirationDate = expirationDate;
         this.credentialId = credentialId;
         this.credentialUrl = credentialUrl;
+        this.documentUrl = documentUrl;
     }
 
     @Override
