@@ -13,6 +13,7 @@ public final class StorageConstants {
     public static final String FOLDER_RESUMES = "resumes";
     public static final String FOLDER_PORTFOLIOS = "portfolios";
     public static final String FOLDER_CERTIFICATES = "certificates";
+    public static final String FOLDER_EDUCATIONS = "educations";
 
     // Default Regions
     public static final String DEFAULT_OCI_REGION = "ap-singapore-1";
@@ -30,5 +31,25 @@ public final class StorageConstants {
      */
     public static String getAvatarPath(UUID userId) {
         return FOLDER_AVATARS + "/" + userId;
+    }
+
+    /**
+     * Builds the directory path for user education proof document: "educations/{userId}"
+     *
+     * @param userId user unique identifier
+     * @return directory path formatted as "educations/{userId}"
+     */
+    public static String getEducationDocumentPath(UUID userId) {
+        return FOLDER_EDUCATIONS + "/" + userId;
+    }
+
+    /**
+     * Builds the directory path for user qualification proof document: "certificates/{userId}"
+     *
+     * @param userId user unique identifier
+     * @return directory path formatted as "certificates/{userId}"
+     */
+    public static String getQualificationDocumentPath(UUID userId) {
+        return FOLDER_CERTIFICATES + "/" + userId;
     }
 }

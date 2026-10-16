@@ -28,10 +28,21 @@ public interface StorageService {
      * @param directory Thư mục mục tiêu trong Bucket (ví dụ: "avatars/{userId}")
      * @param file      Tệp tin multipart tải lên từ client (tối đa 5MB, định dạng: JPEG, PNG, WEBP, GIF)
      * @return Đường dẫn URL công khai tĩnh (Public URL) trỏ trực tiếp đến file trên Object Storage
-     * @throws com.occupify.identity.exception.storage.StorageException nếu file rỗng, vượt quá 5MB,
+     * @throws StorageException nếu file rỗng, vượt quá 5MB,
      *         sai định dạng MIME type, hoặc quá trình upload lên cloud thất bại
      */
     String uploadImage(String directory, MultipartFile file);
+
+    /**
+     * Tải lên một file tài liệu minh chứng (PDF hoặc ảnh) lên Object Storage và trả về đường dẫn tĩnh công khai (Public URL).
+     *
+     * @param directory Thư mục mục tiêu trong Bucket (ví dụ: "educations/{userId}" hoặc "certificates/{userId}")
+     * @param file      Tệp tin multipart tải lên từ client (tối đa 10MB, định dạng: PDF, JPEG, PNG, WEBP)
+     * @return Đường dẫn URL công khai tĩnh (Public URL) trỏ trực tiếp đến file trên Object Storage
+     * @throws StorageException nếu file rỗng, vượt quá 10MB,
+     *         sai định dạng MIME type, hoặc quá trình upload lên cloud thất bại
+     */
+    String uploadDocument(String directory, MultipartFile file);
 
     /**
      * Xóa một đối tượng khỏi Object Storage dựa trên URL công khai hoặc Object Key.

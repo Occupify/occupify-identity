@@ -27,12 +27,19 @@ import java.util.UUID;
 public class S3StorageServiceImpl implements StorageService {
 
     private static final long MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
+    private static final long MAX_DOCUMENT_SIZE = 10 * 1024 * 1024; // 10 MB
     private static final Set<String> ALLOWED_IMAGE_TYPES = Set.of(
             "image/jpeg",
             "image/jpg",
             "image/png",
             "image/webp",
             "image/gif");
+    private static final Set<String> ALLOWED_DOCUMENT_TYPES = Set.of(
+            "application/pdf",
+            "image/jpeg",
+            "image/jpg",
+            "image/png",
+            "image/webp");
 
     private final S3Client s3Client;
     private final S3Properties properties;
@@ -102,6 +109,39 @@ public class S3StorageServiceImpl implements StorageService {
     }
 
     @Override
+    public String uploadDocument(String directory, MultipartFile file) {
+        validateDocumentFile(file);
+
+        String originalFilename = file.getOriginalFilename();
+        String extension = extractExtension(originalFilename, file.getContentType());
+        String cleanDirectory = directory != null ? directory.replaceAll("^/+|/+$", "") : "documents";
+        String key = String.format("%s/%s%s", cleanDirectory, UUID.randomUUID(), extension);
+
+        log.info("Uploading document to S3: bucket={}, key={}, size={} bytes, contentType={}",
+                properties.getBucketName(), key, file.getSize(), file.getContentType());
+
+        try (InputStream inputStream = file.getInputStream()) {
+            PutObjectRequest putRequest = PutObjectRequest.builder()
+                    .bucket(properties.getBucketName())
+                    .key(key)
+                    .contentType(file.getContentType())
+                    .contentLength(file.getSize())
+                    .build();
+
+            s3Client.putObject(putRequest, RequestBody.fromInputStream(inputStream, file.getSize()));
+            String publicUrl = constructPublicUrl(key);
+            log.info("Successfully uploaded document. Public URL: {}", publicUrl);
+            return publicUrl;
+        } catch (IOException e) {
+            log.error("Failed to read input stream for document upload: {}", originalFilename, e);
+            throw new StorageException(StorageErrorCode.UPLOAD_FAILED, "Failed to read uploaded file", e);
+        } catch (Exception e) {
+            log.error("Failed to upload document to S3: bucket={}, key={}", properties.getBucketName(), key, e);
+            throw new StorageException(StorageErrorCode.UPLOAD_FAILED, "S3 upload failed: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
     public void deleteFile(String fileUrlOrKey) {
         if (fileUrlOrKey == null || fileUrlOrKey.isBlank()) {
             return;
@@ -151,11 +191,33 @@ public class S3StorageServiceImpl implements StorageService {
     }
 
     /**
+     * Kiểm tra tính hợp lệ của file tài liệu minh chứng tải lên (không rỗng, dung lượng tối đa 10MB,
+     * đúng định dạng PDF hoặc ảnh).
+     *
+     * @param file File multipart gửi lên từ client
+     * @throws StorageException nếu file rỗng, vượt quá 10MB hoặc sai định dạng MIME
+     */
+    private void validateDocumentFile(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new StorageException(StorageErrorCode.FILE_EMPTY);
+        }
+
+        if (file.getSize() > MAX_DOCUMENT_SIZE) {
+            throw new StorageException(StorageErrorCode.DOCUMENT_TOO_LARGE);
+        }
+
+        String contentType = file.getContentType();
+        if (contentType == null || !ALLOWED_DOCUMENT_TYPES.contains(contentType.toLowerCase())) {
+            throw new StorageException(StorageErrorCode.INVALID_DOCUMENT_TYPE);
+        }
+    }
+
+    /**
      * Trích xuất đuôi mở rộng của file dựa trên tên gốc hoặc Content-Type.
      *
      * @param filename    Tên gốc của file
      * @param contentType Chuỗi MIME type của file
-     * @return Đuôi mở rộng dạng chuỗi (ví dụ: .png, .jpg, .webp)
+     * @return Đuôi mở rộng dạng chuỗi (ví dụ: .png, .jpg, .webp, .pdf)
      */
     private String extractExtension(String filename, String contentType) {
         if (filename != null && filename.contains(".")) {
@@ -164,6 +226,8 @@ public class S3StorageServiceImpl implements StorageService {
                 return ext;
             }
         }
+        if ("application/pdf".equalsIgnoreCase(contentType))
+            return ".pdf";
         if ("image/png".equalsIgnoreCase(contentType))
             return ".png";
         if ("image/webp".equalsIgnoreCase(contentType))
