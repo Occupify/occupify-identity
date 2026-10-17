@@ -15,7 +15,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     boolean existsByEmail(String email);
 
     @Modifying
-    @Query("UPDATE User u SET u.password = :password, u.updatedAt = CURRENT_TIMESTAMP WHERE u.email = :email")
+    @Query("UPDATE User u SET u.passwordHash = :password, u.updatedAt = CURRENT_TIMESTAMP WHERE u.email = :email")
     int updatePasswordByEmail(@Param("email") String email, @Param("password") String password);
 
     @Modifying

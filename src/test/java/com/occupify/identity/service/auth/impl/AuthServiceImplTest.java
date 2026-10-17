@@ -11,12 +11,16 @@ import com.occupify.identity.dto.request.auth.VerifyOtpRequest;
 import com.occupify.identity.dto.response.auth.AuthResponse;
 import com.occupify.identity.dto.response.auth.UserResponse;
 import com.occupify.identity.dto.response.auth.VerifyOtpResponse;
+import com.occupify.identity.entity.Institution;
 import com.occupify.identity.entity.User;
 import com.occupify.identity.enums.OtpType;
 import com.occupify.identity.enums.UserRole;
 import com.occupify.identity.enums.UserStatus;
 import com.occupify.identity.exception.auth.AuthErrorCode;
 import com.occupify.identity.exception.auth.AuthException;
+import com.occupify.identity.exception.profile.ProfileErrorCode;
+import com.occupify.identity.exception.profile.ProfileException;
+import com.occupify.identity.repository.InstitutionRepository;
 import com.occupify.identity.repository.UserRepository;
 import com.occupify.identity.producer.UserEventProducer;
 import com.occupify.identity.security.JwtUtils;
@@ -51,6 +55,9 @@ class AuthServiceImplTest {
     private UserRepository userRepository;
 
     @Mock
+    private InstitutionRepository institutionRepository;
+
+    @Mock
     private PasswordEncoder passwordEncoder;
 
     @Mock
@@ -78,6 +85,7 @@ class AuthServiceImplTest {
         jwtUtils = new JwtUtilsImpl(TEST_SECRET, 3600000, 604800000);
         authService = new AuthServiceImpl(
                 userRepository,
+                institutionRepository,
                 passwordEncoder,
                 jwtUtils,
                 redisTemplate,
@@ -117,26 +125,72 @@ class AuthServiceImplTest {
         when(redisTemplate.delete(otpKey)).thenReturn(true);
     }
 
+    private void mockRedisPendingRegistration(String otpKey, UUID userId, String email, String encodedPass, UUID instId, String otpCode) {
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        String instJson = instId != null ? ",\n  \"institutionId\":\"" + instId + "\"" : "";
+        String json = "{\n" +
+                "  \"userId\":\"" + userId + "\",\n" +
+                "  \"email\":\"" + email + "\",\n" +
+                "  \"encodedPassword\":\"" + encodedPass + "\"" + instJson + ",\n" +
+                "  \"otpCode\":\"" + otpCode + "\",\n" +
+                "  \"attempts\":0,\n" +
+                "  \"createdAt\":1000\n" +
+                "}";
+        when(valueOperations.get(otpKey)).thenReturn(json);
+    }
+
     @Test
     void shouldRegisterNewUserSuccessfully() {
         RegisterRequest request = new RegisterRequest("newuser@occupify.com", "Password123!");
-        UUID userId = UUID.randomUUID();
-        User savedUser = new User(userId, "newuser@occupify.com", "encoded-pass", UserRole.USER.name(),
-                UserStatus.INACTIVE.name(), Instant.now(), Instant.now());
 
         when(userRepository.findByEmail("newuser@occupify.com")).thenReturn(Optional.empty());
         when(passwordEncoder.encode("Password123!")).thenReturn("encoded-pass");
-        when(userRepository.save(any(User.class))).thenReturn(savedUser);
-        mockRedisOtpGeneration("otp:register:newuser@occupify.com");
+        mockRedisOtpGeneration("otp:newuser@occupify.com");
 
         UserResponse response = authService.register(request);
 
         assertNotNull(response);
-        assertEquals(userId, response.id());
+        assertNotNull(response.id());
         assertEquals("newuser@occupify.com", response.email());
         assertEquals("INACTIVE", response.status());
+        verify(userRepository, never()).save(any(User.class));
+        verify(valueOperations).set(eq("otp:newuser@occupify.com"), anyString(), any(Duration.class));
         verify(userEventProducer).publishUserRegistered(
-                argThat(event -> event.userId().equals(userId) && event.email().equals("newuser@occupify.com")));
+                argThat(event -> event.userId().equals(response.id()) && event.email().equals("newuser@occupify.com")));
+    }
+
+    @Test
+    void shouldRegisterNewUserWithInstitutionSuccessfully() {
+        UUID institutionId = UUID.randomUUID();
+        RegisterRequest request = new RegisterRequest("student@occupify.com", "Password123!", institutionId);
+        Institution institution = new Institution(institutionId, "UIT", "UIT", "Vietnam", "TP.HCM", "https://uit.edu.vn", null, true);
+
+        when(userRepository.findByEmail("student@occupify.com")).thenReturn(Optional.empty());
+        when(institutionRepository.findById(institutionId)).thenReturn(Optional.of(institution));
+        when(passwordEncoder.encode("Password123!")).thenReturn("encoded-pass");
+        mockRedisOtpGeneration("otp:student@occupify.com");
+
+        UserResponse response = authService.register(request);
+
+        assertNotNull(response);
+        assertNotNull(response.id());
+        assertEquals("student@occupify.com", response.email());
+        assertEquals(institutionId, response.institutionId());
+        verify(institutionRepository).findById(institutionId);
+        verify(userRepository, never()).save(any(User.class));
+        verify(valueOperations).set(eq("otp:student@occupify.com"), contains(institutionId.toString()), any(Duration.class));
+    }
+
+    @Test
+    void shouldThrowNotFoundWhenRegisteringWithNonExistentInstitution() {
+        UUID nonExistentId = UUID.randomUUID();
+        RegisterRequest request = new RegisterRequest("student@occupify.com", "Password123!", nonExistentId);
+
+        when(institutionRepository.findById(nonExistentId)).thenReturn(Optional.empty());
+
+        ProfileException ex = assertThrows(ProfileException.class, () -> authService.register(request));
+        assertEquals(ProfileErrorCode.INSTITUTION_NOT_FOUND.getCode(), ex.getCode());
+        verify(userRepository, never()).save(any());
     }
 
     @Test
@@ -160,15 +214,15 @@ class AuthServiceImplTest {
 
         when(userRepository.findByEmail("inactive@occupify.com")).thenReturn(Optional.of(inactiveUser));
         when(passwordEncoder.encode("Password123!")).thenReturn("new-encoded-pass");
-        when(userRepository.save(any(User.class))).thenReturn(inactiveUser);
-        mockRedisOtpGeneration("otp:register:inactive@occupify.com");
+        mockRedisOtpGeneration("otp:inactive@occupify.com");
 
         UserResponse response = authService.register(request);
 
         assertNotNull(response);
         assertEquals(userId, response.id());
         assertEquals("INACTIVE", response.status());
-        verify(userRepository).save(inactiveUser);
+        verify(userRepository, never()).save(any(User.class));
+        verify(valueOperations).set(eq("otp:inactive@occupify.com"), anyString(), any(Duration.class));
         verify(userEventProducer).publishUserRegistered(
                 argThat(event -> event.userId().equals(userId) && event.email().equals("inactive@occupify.com")));
     }
@@ -176,11 +230,8 @@ class AuthServiceImplTest {
     @Test
     void shouldResendOtpForRegistration() {
         SendOtpRequest request = new SendOtpRequest("inactive@occupify.com", OtpType.REGISTER);
-        User user = new User(UUID.randomUUID(), "inactive@occupify.com", "pass", "USER", "INACTIVE",
-                Instant.now(), Instant.now());
-
-        when(userRepository.findByEmail("inactive@occupify.com")).thenReturn(Optional.of(user));
-        mockRedisOtpGeneration("otp:register:inactive@occupify.com");
+        UUID userId = UUID.randomUUID();
+        mockRedisPendingRegistration("otp:inactive@occupify.com", userId, "inactive@occupify.com", "encoded-pass", null, "123456");
 
         assertDoesNotThrow(() -> authService.resendOtp(request));
         verify(userEventProducer)
@@ -219,11 +270,12 @@ class AuthServiceImplTest {
     void shouldVerifyRegisterOtpAndActivateAccount() {
         VerifyOtpRequest request = new VerifyOtpRequest("user@occupify.com", "123456", OtpType.REGISTER);
         UUID userId = UUID.randomUUID();
-        User user = new User(userId, "user@occupify.com", "pass", "USER", "INACTIVE",
+        User user = new User(userId, "user@occupify.com", "encoded-pass", UserRole.USER.name(), "ACTIVE",
                 Instant.now(), Instant.now());
 
-        when(userRepository.findByEmail("user@occupify.com")).thenReturn(Optional.of(user));
-        mockRedisOtpVerification("otp:register:user@occupify.com", "123456", "$2a$10$hashed");
+        mockRedisPendingRegistration("otp:user@occupify.com", userId, "user@occupify.com", "encoded-pass", null, "123456");
+        when(redisTemplate.delete("otp:user@occupify.com")).thenReturn(true);
+        when(userRepository.findByEmail("user@occupify.com")).thenReturn(Optional.empty());
         when(userRepository.save(any(User.class))).thenReturn(user);
         mockRedisSessionSave();
 
@@ -234,7 +286,29 @@ class AuthServiceImplTest {
         assertNotNull(auth.accessToken());
         assertNotNull(auth.refreshToken());
         assertEquals("ACTIVE", auth.user().status());
-        verify(userRepository).save(user);
+        verify(userRepository).save(any(User.class));
+    }
+
+    @Test
+    void shouldAutoDetectRegisterOtpWhenTypeIsNull() {
+        VerifyOtpRequest request = new VerifyOtpRequest("user@occupify.com", "123456", null);
+        UUID userId = UUID.randomUUID();
+        User user = new User(userId, "user@occupify.com", "encoded-pass", UserRole.USER.name(), "ACTIVE",
+                Instant.now(), Instant.now());
+
+        when(redisTemplate.hasKey("otp:user@occupify.com")).thenReturn(true);
+        mockRedisPendingRegistration("otp:user@occupify.com", userId, "user@occupify.com", "encoded-pass", null, "123456");
+        when(redisTemplate.delete("otp:user@occupify.com")).thenReturn(true);
+        when(userRepository.findByEmail("user@occupify.com")).thenReturn(Optional.empty());
+        when(userRepository.save(any(User.class))).thenReturn(user);
+        mockRedisSessionSave();
+
+        Object result = authService.verifyOtp(request);
+
+        assertTrue(result instanceof AuthResponse);
+        AuthResponse auth = (AuthResponse) result;
+        assertNotNull(auth.accessToken());
+        assertEquals("ACTIVE", auth.user().status());
     }
 
     @Test

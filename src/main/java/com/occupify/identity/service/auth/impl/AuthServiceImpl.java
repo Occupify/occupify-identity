@@ -12,15 +12,20 @@ import com.occupify.identity.dto.request.auth.VerifyOtpRequest;
 import com.occupify.identity.dto.response.auth.AuthResponse;
 import com.occupify.identity.dto.response.auth.UserResponse;
 import com.occupify.identity.dto.response.auth.VerifyOtpResponse;
+import com.occupify.identity.entity.Institution;
 import com.occupify.identity.entity.User;
 import com.occupify.identity.enums.OtpType;
+import com.occupify.identity.enums.UserRole;
 import com.occupify.identity.enums.UserStatus;
 import com.occupify.identity.exception.auth.AuthErrorCode;
 import com.occupify.identity.exception.auth.AuthException;
+import com.occupify.identity.exception.profile.ProfileErrorCode;
+import com.occupify.identity.exception.profile.ProfileException;
 import com.occupify.identity.event.PasswordResetRequestedEvent;
 import com.occupify.identity.event.UserRegisteredEvent;
 import com.occupify.identity.mapper.UserMapper;
 import com.occupify.identity.producer.UserEventProducer;
+import com.occupify.identity.repository.InstitutionRepository;
 import com.occupify.identity.repository.UserRepository;
 import com.occupify.identity.security.JwtUtils;
 import com.occupify.identity.service.auth.AuthService;
@@ -52,6 +57,7 @@ public class AuthServiceImpl implements AuthService {
     private static final Duration RESET_TOKEN_TTL = Duration.ofMinutes(10);
 
     private final UserRepository userRepository;
+    private final @Nullable InstitutionRepository institutionRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtils jwtUtils;
     private final StringRedisTemplate redisTemplate;
@@ -70,6 +76,7 @@ public class AuthServiceImpl implements AuthService {
     @Autowired
     public AuthServiceImpl(
             UserRepository userRepository,
+            @Nullable InstitutionRepository institutionRepository,
             PasswordEncoder passwordEncoder,
             JwtUtils jwtUtils,
             StringRedisTemplate redisTemplate,
@@ -84,6 +91,7 @@ public class AuthServiceImpl implements AuthService {
             @Value("${app.otp.cooldown-seconds:60}") long cooldownSeconds,
             @Value("${app.jwt.refresh-token-expiration:604800000}") long refreshTokenExpirationMs) {
         this.userRepository = userRepository;
+        this.institutionRepository = institutionRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtils = jwtUtils;
         this.redisTemplate = redisTemplate;
@@ -112,7 +120,26 @@ public class AuthServiceImpl implements AuthService {
             int maxAttempts,
             long cooldownSeconds,
             long refreshTokenExpirationMs) {
-        this(userRepository, passwordEncoder, jwtUtils, redisTemplate,
+        this(userRepository, null, passwordEncoder, jwtUtils, redisTemplate,
+                revokeAllSessionsScript, objectMapper, new OtpUtils(), new UserMapper(), userEventProducer,
+                otpLength, otpExpirationSeconds, maxAttempts, cooldownSeconds, refreshTokenExpirationMs);
+    }
+
+    public AuthServiceImpl(
+            UserRepository userRepository,
+            @Nullable InstitutionRepository institutionRepository,
+            PasswordEncoder passwordEncoder,
+            JwtUtils jwtUtils,
+            StringRedisTemplate redisTemplate,
+            RedisScript<Long> revokeAllSessionsScript,
+            ObjectMapper objectMapper,
+            UserEventProducer userEventProducer,
+            int otpLength,
+            long otpExpirationSeconds,
+            int maxAttempts,
+            long cooldownSeconds,
+            long refreshTokenExpirationMs) {
+        this(userRepository, institutionRepository, passwordEncoder, jwtUtils, redisTemplate,
                 revokeAllSessionsScript, objectMapper, new OtpUtils(), new UserMapper(), userEventProducer,
                 otpLength, otpExpirationSeconds, maxAttempts, cooldownSeconds, refreshTokenExpirationMs);
     }
@@ -121,6 +148,16 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private record OtpData(String otpCode, int attempts, long createdAt) {
+    }
+
+    private record PendingRegistrationData(
+            UUID userId,
+            String email,
+            String encodedPassword,
+            @Nullable UUID institutionId,
+            String otpCode,
+            int attempts,
+            long createdAt) {
     }
 
     // ==========================================
@@ -133,12 +170,69 @@ public class AuthServiceImpl implements AuthService {
         validateEmailAndPassword(request.email(), request.password());
         String normalizedEmail = EmailUtil.normalize(request.email());
 
-        Optional<User> existingUserOpt = userRepository.findByEmail(normalizedEmail);
-        if (existingUserOpt.isPresent()) {
-            return handleExistingUserRegistration(existingUserOpt.get(), request.password());
-        } else {
-            return handleNewUserRegistration(normalizedEmail, request.password());
+        Institution institution = null;
+        if (request.institutionId() != null) {
+            if (institutionRepository == null) {
+                throw new ProfileException(ProfileErrorCode.INSTITUTION_NOT_FOUND,
+                        "Educational institution repository is not configured");
+            }
+            institution = institutionRepository.findById(request.institutionId())
+                    .orElseThrow(() -> new ProfileException(ProfileErrorCode.INSTITUTION_NOT_FOUND,
+                            "Educational institution not found with id: " + request.institutionId()));
         }
+
+        Optional<User> existingUserOpt = userRepository.findByEmail(normalizedEmail);
+        UUID userId;
+        if (existingUserOpt.isPresent()) {
+            User existingUser = existingUserOpt.get();
+            if (UserStatus.ACTIVE.name().equalsIgnoreCase(existingUser.getStatus())) {
+                throw new AuthException(AuthErrorCode.AUTH_001);
+            }
+            if (UserStatus.BANNED.name().equalsIgnoreCase(existingUser.getStatus())) {
+                throw new AuthException(AuthErrorCode.USER_008);
+            }
+            userId = existingUser.getId();
+        } else {
+            userId = UUID.randomUUID();
+        }
+
+        String key = buildOtpKey(normalizedEmail, OtpType.REGISTER);
+        PendingRegistrationData existingPending = fetchExistingPendingRegistration(key);
+        if (existingPending != null) {
+            checkCooldown(existingPending.createdAt());
+        }
+
+        String encodedPassword = passwordEncoder.encode(request.password());
+        String rawOtp = generateNumericOtp(otpLength);
+        PendingRegistrationData pendingData = new PendingRegistrationData(
+                userId,
+                normalizedEmail,
+                encodedPassword,
+                request.institutionId(),
+                rawOtp,
+                0,
+                System.currentTimeMillis());
+
+        savePendingRegistration(key, pendingData, normalizedEmail);
+
+        log.info(">> Registration OTP for [{}]: {}", normalizedEmail, rawOtp);
+
+        userEventProducer.publishUserRegistered(new UserRegisteredEvent(
+                userId,
+                normalizedEmail,
+                rawOtp,
+                Instant.now()));
+
+        // NOTE: User info is saved in Redis ONLY until OTP verification. Not stored in
+        // PostgreSQL yet.
+        return new UserResponse(
+                userId,
+                normalizedEmail,
+                UserRole.USER.name(),
+                UserStatus.INACTIVE.name(),
+                Instant.now(),
+                request.institutionId(),
+                institution != null ? institution.getName() : null);
     }
 
     @Override
@@ -200,7 +294,11 @@ public class AuthServiceImpl implements AuthService {
     public void resendOtp(SendOtpRequest request) {
         EmailUtil.validate(request.email());
         String normalizedEmail = EmailUtil.normalize(request.email());
-        OtpType type = request.type() != null ? request.type() : OtpType.FORGOT_PASSWORD;
+        OtpType type = request.type();
+        if (type == null) {
+            String registerKey = buildOtpKey(normalizedEmail, OtpType.REGISTER);
+            type = Boolean.TRUE.equals(redisTemplate.hasKey(registerKey)) ? OtpType.REGISTER : OtpType.FORGOT_PASSWORD;
+        }
 
         if (type == OtpType.REGISTER) {
             sendRegisterOtp(normalizedEmail);
@@ -214,7 +312,11 @@ public class AuthServiceImpl implements AuthService {
     public Object verifyOtp(VerifyOtpRequest request) {
         EmailUtil.validate(request.email());
         String normalizedEmail = EmailUtil.normalize(request.email());
-        OtpType type = request.type() != null ? request.type() : OtpType.FORGOT_PASSWORD;
+        OtpType type = request.type();
+        if (type == null) {
+            String registerKey = buildOtpKey(normalizedEmail, OtpType.REGISTER);
+            type = Boolean.TRUE.equals(redisTemplate.hasKey(registerKey)) ? OtpType.REGISTER : OtpType.FORGOT_PASSWORD;
+        }
 
         if (type == OtpType.REGISTER) {
             return verifyRegisterOtp(normalizedEmail, request.otpCode());
@@ -233,7 +335,8 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public void resetPassword(@Nullable String rawResetToken, ResetPasswordRequest request) {
-        String resetToken = cleanToken(rawResetToken != null && !rawResetToken.isBlank() ? rawResetToken : request.resetToken());
+        String resetToken = cleanToken(
+                rawResetToken != null && !rawResetToken.isBlank() ? rawResetToken : request.resetToken());
         if (resetToken == null || resetToken.isBlank()) {
             throw new AuthException(AuthErrorCode.AUTH_016, "Password reset token is required");
         }
@@ -271,51 +374,37 @@ public class AuthServiceImpl implements AuthService {
     // Registration Helpers
     // ==========================================
 
-    private UserResponse handleExistingUserRegistration(User existingUser, String newPassword) {
-        if (UserStatus.ACTIVE.name().equalsIgnoreCase(existingUser.getStatus())) {
-            throw new AuthException(AuthErrorCode.AUTH_001);
-        }
-        if (UserStatus.BANNED.name().equalsIgnoreCase(existingUser.getStatus())) {
-            throw new AuthException(AuthErrorCode.USER_008);
-        }
-        String encodedPassword = passwordEncoder.encode(newPassword);
-        existingUser.setPassword(encodedPassword);
-        userRepository.save(existingUser);
-        String rawOtp = generateAndStoreOtp(existingUser.getEmail(), OtpType.REGISTER);
-        userEventProducer.publishUserRegistered(new UserRegisteredEvent(
-                existingUser.getId(),
-                existingUser.getEmail(),
-                rawOtp,
-                Instant.now()
-        ));
-        return mapToUserResponse(existingUser);
-    }
-
-    private UserResponse handleNewUserRegistration(String email, String rawPassword) {
-        String encodedPassword = passwordEncoder.encode(rawPassword);
-        User newUser = User.createInactive(email, encodedPassword);
-        User savedUser = userRepository.save(newUser);
-        String rawOtp = generateAndStoreOtp(email, OtpType.REGISTER);
-        userEventProducer.publishUserRegistered(new UserRegisteredEvent(
-                savedUser.getId(),
-                savedUser.getEmail(),
-                rawOtp,
-                Instant.now()
-        ));
-        return mapToUserResponse(savedUser);
-    }
-
     private void sendRegisterOtp(String email) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new AuthException(AuthErrorCode.AUTH_012));
-        validateRegistrationEligibility(user);
-        String rawOtp = generateAndStoreOtp(email, OtpType.REGISTER);
-        userEventProducer.publishUserRegistered(new UserRegisteredEvent(
-                user.getId(),
-                user.getEmail(),
+        String key = buildOtpKey(email, OtpType.REGISTER);
+        PendingRegistrationData pendingData = fetchExistingPendingRegistration(key);
+        if (pendingData == null) {
+            Optional<User> existingUser = userRepository.findByEmail(email);
+            if (existingUser.isPresent() && UserStatus.ACTIVE.name().equalsIgnoreCase(existingUser.get().getStatus())) {
+                throw new AuthException(AuthErrorCode.AUTH_015);
+            }
+            throw new AuthException(AuthErrorCode.AUTH_012,
+                    "Registration session expired or user not found. Please register again.");
+        }
+        checkCooldown(pendingData.createdAt());
+
+        String rawOtp = generateNumericOtp(otpLength);
+        PendingRegistrationData updated = new PendingRegistrationData(
+                pendingData.userId(),
+                pendingData.email(),
+                pendingData.encodedPassword(),
+                pendingData.institutionId(),
                 rawOtp,
-                Instant.now()
-        ));
+                0,
+                System.currentTimeMillis());
+        savePendingRegistration(key, updated, email);
+
+        log.info(">> Resent registration OTP for [{}]: {}", email, rawOtp);
+
+        userEventProducer.publishUserRegistered(new UserRegisteredEvent(
+                pendingData.userId(),
+                pendingData.email(),
+                rawOtp,
+                Instant.now()));
     }
 
     private void sendForgotPasswordOtp(String email) {
@@ -327,8 +416,7 @@ public class AuthServiceImpl implements AuthService {
                 user.getId(),
                 user.getEmail(),
                 rawOtp,
-                Instant.now()
-        ));
+                Instant.now()));
     }
 
     // ==========================================
@@ -336,13 +424,72 @@ public class AuthServiceImpl implements AuthService {
     // ==========================================
 
     private AuthResponse verifyRegisterOtp(String email, String otpCode) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new AuthException(AuthErrorCode.AUTH_012));
-        validateRegistrationEligibility(user);
-        verifyOtpInternal(email, otpCode, OtpType.REGISTER);
-        user.setStatus(UserStatus.ACTIVE.name());
-        userRepository.save(user);
-        return generateAuthResponse(user);
+        String key = buildOtpKey(email, OtpType.REGISTER);
+        PendingRegistrationData pendingData = fetchExistingPendingRegistration(key);
+        if (pendingData == null) {
+            Optional<User> alreadyActiveUser = userRepository.findByEmail(email);
+            if (alreadyActiveUser.isPresent() && UserStatus.ACTIVE.name().equalsIgnoreCase(alreadyActiveUser.get().getStatus())) {
+                log.info("User [{}] is already ACTIVE. Returning fresh session tokens.", email);
+                return generateAuthResponse(alreadyActiveUser.get());
+            }
+            throw new AuthException(AuthErrorCode.AUTH_008, "Registration OTP expired or invalid");
+        }
+
+        if (pendingData.attempts() >= maxAttempts) {
+            redisTemplate.delete(key);
+            redisTemplate.delete("otp:register:" + email);
+            throw new AuthException(AuthErrorCode.AUTH_010);
+        }
+
+        boolean matches = pendingData.otpCode() != null && (pendingData.otpCode().equals(otpCode.trim())
+                || (pendingData.otpCode().startsWith("$2a$")
+                        && passwordEncoder.matches(otpCode.trim(), pendingData.otpCode())));
+        if (!matches) {
+            int newAttempts = pendingData.attempts() + 1;
+            if (newAttempts >= maxAttempts) {
+                redisTemplate.delete(key);
+                redisTemplate.delete("otp:register:" + email);
+                throw new AuthException(AuthErrorCode.AUTH_010);
+            }
+            updatePendingRegistrationAttempts(key, pendingData, newAttempts);
+            throw new AuthException(AuthErrorCode.AUTH_009,
+                    "Invalid OTP code. " + (maxAttempts - newAttempts) + " attempts remaining.");
+        }
+
+        redisTemplate.delete(key);
+        redisTemplate.delete("otp:register:" + email);
+
+        Institution institution = null;
+        if (pendingData.institutionId() != null && institutionRepository != null) {
+            institution = institutionRepository.findById(pendingData.institutionId()).orElse(null);
+        }
+
+        // Persist user to PostgreSQL upon successful OTP verification
+        Optional<User> existingUserOpt = userRepository.findByEmail(email);
+        User user;
+        if (existingUserOpt.isPresent()) {
+            user = existingUserOpt.get();
+            user.setPassword(pendingData.encodedPassword());
+            user.setStatus(UserStatus.ACTIVE.name());
+            if (institution != null) {
+                user.setInstitution(institution);
+            }
+        } else {
+            user = new User(
+                    pendingData.userId() != null ? pendingData.userId() : UUID.randomUUID(),
+                    pendingData.email(),
+                    pendingData.encodedPassword(),
+                    UserRole.USER.name(),
+                    UserStatus.ACTIVE.name(),
+                    Instant.now(),
+                    Instant.now());
+            if (institution != null) {
+                user.setInstitution(institution);
+            }
+        }
+        User savedUser = userRepository.save(user);
+
+        return generateAuthResponse(savedUser);
     }
 
     private VerifyOtpResponse verifyForgotPasswordOtp(String email, String otpCode) {
@@ -580,21 +727,98 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private void checkCooldown(OtpData existingData) {
-        long elapsed = System.currentTimeMillis() - existingData.createdAt();
+        checkCooldown(existingData.createdAt());
+    }
+
+    private void checkCooldown(long createdAt) {
+        long elapsed = System.currentTimeMillis() - createdAt;
         if (elapsed < cooldownMillis) {
             throw new AuthException(AuthErrorCode.AUTH_007);
         }
     }
 
+    private void savePendingRegistration(String key, PendingRegistrationData data, String email) {
+        try {
+            String json = objectMapper.writeValueAsString(data);
+            redisTemplate.opsForValue().set(key, json, otpExpirationDuration);
+            log.info("Saved pending registration in Redis for [{}]", email);
+        } catch (JsonProcessingException e) {
+            log.error("Failed to serialize pending registration for [{}]: {}", email, e.getMessage(), e);
+            throw new AuthException(AuthErrorCode.AUTH_011);
+        }
+    }
+
+    private void updatePendingRegistrationAttempts(String key, PendingRegistrationData data, int newAttempts) {
+        PendingRegistrationData updated = new PendingRegistrationData(
+                data.userId(),
+                data.email(),
+                data.encodedPassword(),
+                data.institutionId(),
+                data.otpCode(),
+                newAttempts,
+                data.createdAt());
+        try {
+            String json = objectMapper.writeValueAsString(updated);
+            Long expireSeconds = redisTemplate.getExpire(key);
+            Duration safeTtl = (expireSeconds != null && expireSeconds > 0)
+                    ? Duration.ofSeconds(expireSeconds)
+                    : otpExpirationDuration;
+            redisTemplate.opsForValue().set(key, json, safeTtl);
+        } catch (JsonProcessingException e) {
+            log.error("Failed to update pending registration attempts in Redis: {}", e.getMessage(), e);
+            throw new AuthException(AuthErrorCode.AUTH_011, "Failed to update OTP attempts state");
+        }
+    }
+
+    @Nullable
+    private PendingRegistrationData fetchExistingPendingRegistration(String key) {
+        String raw = redisTemplate.opsForValue().get(key);
+        if (raw == null || raw.isBlank()) {
+            if (key.startsWith("otp:") && !key.startsWith("otp:register:")) {
+                raw = redisTemplate.opsForValue().get("otp:register:" + key.substring("otp:".length()));
+            }
+        }
+        if (raw == null || raw.isBlank()) {
+            log.warn("No pending registration found in Redis for key [{}]", key);
+            return null;
+        }
+
+        String trimmed = raw.trim();
+        if (trimmed.startsWith("{")) {
+            try {
+                return objectMapper.readValue(trimmed, PendingRegistrationData.class);
+            } catch (JsonProcessingException e) {
+                log.error("Failed to deserialize pending registration data from Redis for key [{}]: {}", key,
+                        e.getMessage(), e);
+                throw new AuthException(AuthErrorCode.AUTH_011, "Corrupted pending registration data format");
+            }
+        } else {
+            // Support raw OTP code stored directly in Redis (e.g. manual SET otp:user@email.com 123456)
+            String email = key.startsWith("otp:register:")
+                    ? key.substring("otp:register:".length())
+                    : (key.startsWith("otp:") ? key.substring("otp:".length()) : key);
+            String plainOtp = trimmed.replace("\"", "").replace("'", "").trim();
+            log.info("Detected raw plaintext OTP in Redis for [{}]: {}", email, plainOtp);
+            return new PendingRegistrationData(
+                    UUID.randomUUID(),
+                    email,
+                    "",
+                    null,
+                    plainOtp,
+                    0,
+                    System.currentTimeMillis()
+            );
+        }
+    }
+
     private String createAndSaveOtp(String key, String email, OtpType type) {
         String rawOtp = generateNumericOtp(otpLength);
-        String hashedOtp = passwordEncoder.encode(rawOtp);
-        OtpData otpData = new OtpData(hashedOtp, 0, System.currentTimeMillis());
+        OtpData otpData = new OtpData(rawOtp, 0, System.currentTimeMillis());
 
         try {
             String json = objectMapper.writeValueAsString(otpData);
             redisTemplate.opsForValue().set(key, json, otpExpirationDuration);
-            log.info("Generated {} OTP for user [{}]", type, email);
+            log.info(">> OTP for user [{}]: {}", email, rawOtp);
             return rawOtp;
         } catch (JsonProcessingException e) {
             log.error("Failed to serialize OTP data for [{}]: {}", email, e.getMessage(), e);
@@ -608,7 +832,8 @@ public class AuthServiceImpl implements AuthService {
             throw new AuthException(AuthErrorCode.AUTH_010);
         }
 
-        boolean matches = passwordEncoder.matches(rawOtp, otpData.otpCode());
+        boolean matches = otpData.otpCode() != null && (otpData.otpCode().equals(rawOtp.trim())
+                || (otpData.otpCode().startsWith("$2a$") && passwordEncoder.matches(rawOtp.trim(), otpData.otpCode())));
         if (!matches) {
             int newAttempts = otpData.attempts() + 1;
             if (newAttempts >= maxAttempts) {
@@ -667,7 +892,8 @@ public class AuthServiceImpl implements AuthService {
             return null;
         }
         String cleaned = token.trim();
-        while ((cleaned.startsWith("\"") && cleaned.endsWith("\"")) || (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
+        while ((cleaned.startsWith("\"") && cleaned.endsWith("\""))
+                || (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
             cleaned = cleaned.substring(1, cleaned.length() - 1).trim();
         }
         if (cleaned.startsWith("Bearer ")) {

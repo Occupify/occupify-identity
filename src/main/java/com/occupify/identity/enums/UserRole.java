@@ -1,8 +1,8 @@
 package com.occupify.identity.enums;
 
 public enum UserRole {
-    USER,
-    ADMIN;
+    ADMIN,
+    USER;
 
     public static boolean isAdmin(String role) {
         return ADMIN.name().equalsIgnoreCase(role);

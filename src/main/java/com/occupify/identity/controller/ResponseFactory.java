@@ -25,7 +25,7 @@ public class ResponseFactory {
                 new PageResponse.PagingInfo(page, size, totalElements, totalPages));
     }
 
-    public <T> CreatedResponse<T> createCreatedResponse(HttpStatus status, String message, T data) {
+    public <T> CreatedResponse<T> createCreatedResponse(HttpStatus status, String message, @Nullable T data) {
         return new CreatedResponse<>(status.value(), message, data);
     }
 
@@ -47,7 +47,7 @@ public class ResponseFactory {
         return ResponseEntity.status(status).body(response);
     }
 
-    public <T> ResponseEntity<CreatedResponse<T>> created(T data, String message) {
+    public <T> ResponseEntity<CreatedResponse<T>> created(@Nullable T data, String message) {
         CreatedResponse<T> response = new CreatedResponse<>(HttpStatus.CREATED.value(), message, data);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }

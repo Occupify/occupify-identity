@@ -5,7 +5,21 @@ spring:
   application:
     name: occupify-identity
   config:
-    import: optional:file:.env[.properties]
+    import:
+      - optional:file:.env[.properties]
+      - optional:file:identity.env[.properties]
+
+  web:
+    resources:
+      add-mappings: true
+      static-locations: classpath:/static/
+
+  # --- File Upload Configuration ---
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 50MB
+      max-request-size: 50MB
 
   # --- PostgreSQL DataSource Configuration (JDBC) ---
   datasource:
@@ -66,12 +80,35 @@ app:
 
   otp:
     length: ${OTP_LENGTH:6}
-    expiration-seconds: ${OTP_EXPIRATION_SECONDS:300}
-    max-attempts: ${OTP_MAX_ATTEMPTS:3}
-    cooldown-seconds: ${OTP_COOLDOWN_SECONDS:60}
+    expiration-seconds: ${OTP_EXPIRATION_SECONDS:900}
+    max-attempts: ${OTP_MAX_ATTEMPTS:5}
+    cooldown-seconds: ${OTP_COOLDOWN_SECONDS:5}
 
   rabbitmq:
     exchange: ${RABBITMQ_NOTIFICATION_EXCHANGE:occupify.notification.exchange}
     user-registered-routing-key: ${RABBITMQ_USER_REGISTERED_ROUTING_KEY:user.registered}
     password-reset-routing-key: ${RABBITMQ_PASSWORD_RESET_ROUTING_KEY:user.password-reset}
+
+  storage:
+    s3:
+      bucket-namespace: ${S3_BUCKET_NAMESPACE:}
+      region: ${S3_REGION:ap-singapore-1}
+      endpoint: ${S3_ENDPOINT:}
+      bucket-name: ${S3_BUCKET_NAME:occupify-storage}
+      access-key: ${S3_ACCESS_KEY:}
+      secret-key: ${S3_SECRET_KEY:}
+      public-url-prefix: ${S3_PUBLIC_URL_PREFIX:}
+      path-style-access-enabled: ${S3_PATH_STYLE_ACCESS_ENABLED:true}
+
+scalar:
+  path: ${SCALAR_PATH:/docs}
+  url: ${SCALAR_URL:/v3/api-docs}
+  enabled: ${SCALAR_ENABLED:true}
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: true
+
 

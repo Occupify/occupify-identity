@@ -36,6 +36,15 @@ build/
 *.tmp
 
 ### Environment files ###
+.env
+.env.*
+*.env
 identity.env
 !.env.example
+
+### AI & Agent Configurations ###
+.agents/
+AGENTS.md
+GEMINI.md
+.gemini/
 

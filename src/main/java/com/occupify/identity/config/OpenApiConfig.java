@@ -3,9 +3,13 @@ package com.occupify.identity.config;
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
+import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
+import io.swagger.v3.oas.models.servers.Server;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
+import java.util.List;
 
 @Configuration
 public class OpenApiConfig {
@@ -18,13 +22,15 @@ public class OpenApiConfig {
 				.info(new Info()
 						.title("Occupify Identity API")
 						.version("1.0.0")
-						.description("Authentication and API Gateway documentation."))
+						.description("Authentication and User Identity Management Service for Occupify"))
+				.servers(List.of(new Server().url("/").description("API Server Environment")))
 				.components(new Components()
 						.addSecuritySchemes(SECURITY_SCHEME_NAME, new SecurityScheme()
 								.name(SECURITY_SCHEME_NAME)
 								.type(SecurityScheme.Type.HTTP)
 								.scheme("bearer")
 								.bearerFormat("JWT")
-								.description("JWT Access Token")));
+								.description("JWT Access Token")))
+				.addSecurityItem(new SecurityRequirement().addList(SECURITY_SCHEME_NAME));
 	}
 }

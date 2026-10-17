@@ -57,10 +57,10 @@ public class AuthController extends AbstractBaseController {
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Register", description = "Register a new user account and automatically send a verification OTP to the user's email")
-    public CreatedResponse<UserResponse> register(@Valid @RequestBody RegisterRequest request) {
+    public CreatedResponse<Void> register(@Valid @RequestBody RegisterRequest request) {
         log.info("[POST /auth/register] Register request for email: {}", request.email());
-        UserResponse data = authService.register(request);
-        return created(data, "Account registered successfully. Verification OTP has been sent to your email.");
+        authService.register(request);
+        return created("Account registered successfully. Verification OTP has been sent to your email.");
     }
 
     @PostMapping("/resend-otp")
