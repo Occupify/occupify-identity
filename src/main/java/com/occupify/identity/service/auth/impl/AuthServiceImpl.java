@@ -22,6 +22,7 @@ import com.occupify.identity.exception.auth.AuthException;
 import com.occupify.identity.exception.profile.ProfileErrorCode;
 import com.occupify.identity.exception.profile.ProfileException;
 import com.occupify.identity.event.PasswordResetRequestedEvent;
+import com.occupify.identity.event.UserActivatedEvent;
 import com.occupify.identity.event.UserRegisteredEvent;
 import com.occupify.identity.mapper.UserMapper;
 import com.occupify.identity.producer.UserEventProducer;
@@ -488,6 +489,14 @@ public class AuthServiceImpl implements AuthService {
             }
         }
         User savedUser = userRepository.save(user);
+
+        userEventProducer.publishUserActivated(new UserActivatedEvent(
+                savedUser.getId(),
+                savedUser.getEmail(),
+                null,
+                savedUser.getRole(),
+                savedUser.getStatus(),
+                Instant.now()));
 
         return generateAuthResponse(savedUser);
     }
