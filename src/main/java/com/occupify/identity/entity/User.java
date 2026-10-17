@@ -6,9 +6,12 @@ import com.occupify.identity.enums.UserRole;
 import com.occupify.identity.enums.UserStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -58,7 +61,7 @@ public class User {
     private @Nullable String phoneNumber;
 
     @Column(name = "role", nullable = false, length = 50)
-    private String role = UserRole.EMPLOYEE.name();
+    private String role = UserRole.USER.name();
 
     @Column(name = "status", nullable = false, length = 50)
     private String status = UserStatus.ACTIVE.name();
@@ -74,12 +77,16 @@ public class User {
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "institution_id")
+    private @Nullable Institution institution;
+
     public User(UUID id, String email, String passwordHash, String role, String status, Instant createdAt,
             Instant updatedAt) {
         this.id = id;
         this.email = email;
         this.passwordHash = passwordHash;
-        this.role = role != null ? role : UserRole.EMPLOYEE.name();
+        this.role = role != null ? role : UserRole.USER.name();
         this.status = status != null ? status : UserStatus.ACTIVE.name();
     }
 
@@ -95,7 +102,7 @@ public class User {
     }
 
     public static User createNew(String email, String encodedPassword) {
-        return createWithRole(email, encodedPassword, UserRole.EMPLOYEE.name());
+        return createWithRole(email, encodedPassword, UserRole.USER.name());
     }
 
     public static User createInactive(String email, String encodedPassword) {
@@ -103,7 +110,7 @@ public class User {
                 UUID.randomUUID(),
                 email,
                 encodedPassword,
-                UserRole.EMPLOYEE.name(),
+                UserRole.USER.name(),
                 UserStatus.INACTIVE.name(),
                 Instant.now(),
                 Instant.now());
@@ -114,7 +121,7 @@ public class User {
                 UUID.randomUUID(),
                 email,
                 encodedPassword,
-                role != null ? role : UserRole.EMPLOYEE.name(),
+                role != null ? role : UserRole.USER.name(),
                 UserStatus.ACTIVE.name(),
                 Instant.now(),
                 Instant.now());

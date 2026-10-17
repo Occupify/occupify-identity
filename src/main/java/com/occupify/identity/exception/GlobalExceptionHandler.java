@@ -58,6 +58,27 @@ public class GlobalExceptionHandler {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
 
+        @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+        public ResponseEntity<ErrorResponse> handleHttpMessageNotReadable(
+                        org.springframework.http.converter.HttpMessageNotReadableException ex,
+                        HttpServletRequest request) {
+                String path = request != null ? request.getRequestURI() : "unknown";
+                String correlationId = CorrelationIdFilter.resolveCorrelationId(request);
+
+                String msg = "Malformed request body or invalid parameter";
+                if (ex.getMostSpecificCause() != null && ex.getMostSpecificCause().getMessage() != null) {
+                        msg = ex.getMostSpecificCause().getMessage();
+                }
+
+                log.warn("[Corr-{}] Unreadable body at [{}]: {}", correlationId, path, msg);
+
+                ErrorResponse response = new ErrorResponse(
+                                HttpStatus.BAD_REQUEST.value(),
+                                msg,
+                                AuthErrorCode.AUTH_000.getCode());
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+
         @ExceptionHandler(MaxUploadSizeExceededException.class)
         public ResponseEntity<ErrorResponse> handleMaxUploadSizeExceeded(
                         MaxUploadSizeExceededException ex,

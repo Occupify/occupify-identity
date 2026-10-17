@@ -80,9 +80,9 @@ app:
 
   otp:
     length: ${OTP_LENGTH:6}
-    expiration-seconds: ${OTP_EXPIRATION_SECONDS:300}
-    max-attempts: ${OTP_MAX_ATTEMPTS:3}
-    cooldown-seconds: ${OTP_COOLDOWN_SECONDS:60}
+    expiration-seconds: ${OTP_EXPIRATION_SECONDS:900}
+    max-attempts: ${OTP_MAX_ATTEMPTS:5}
+    cooldown-seconds: ${OTP_COOLDOWN_SECONDS:5}
 
   rabbitmq:
     exchange: ${RABBITMQ_NOTIFICATION_EXCHANGE:occupify.notification.exchange}

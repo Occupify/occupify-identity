@@ -35,6 +35,10 @@ public abstract class AbstractBaseController {
         return responseFactory.createCreatedResponse(HttpStatus.CREATED, message, data);
     }
 
+    protected CreatedResponse<Void> created(String message) {
+        return responseFactory.createCreatedResponse(HttpStatus.CREATED, message, null);
+    }
+
     protected <T> PageResponse<T> paging(List<T> data, int page, int size, long totalElements, int totalPages,
             String message) {
         return responseFactory.createPageResponse(HttpStatus.OK, message, data, page, size, totalElements, totalPages);

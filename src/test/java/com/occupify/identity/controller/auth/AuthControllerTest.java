@@ -75,8 +75,27 @@ class AuthControllerTest {
                                 .content(objectMapper.writeValueAsString(request)))
                                 .andExpect(status().isCreated())
                                 .andExpect(jsonPath("$.statusCode").value(201))
-                                .andExpect(jsonPath("$.data.email").value("new@occupify.com"))
-                                .andExpect(jsonPath("$.data.status").value("INACTIVE"));
+                                .andExpect(jsonPath("$.data").doesNotExist())
+                                .andExpect(jsonPath("$.message").value("Account registered successfully. Verification OTP has been sent to your email."));
+        }
+
+        @Test
+        void shouldRegisterAccountWithInstitutionIdWith201Created() throws Exception {
+                UUID institutionId = UUID.randomUUID();
+                RegisterRequest request = new RegisterRequest("new@occupify.com", "Password123!", institutionId);
+                UUID userId = UUID.randomUUID();
+                UserResponse registerResponse = new UserResponse(userId, "new@occupify.com", "USER", "INACTIVE",
+                                Instant.now(), institutionId, "Đại học Bách khoa Hà Nội");
+
+                when(authService.register(any(RegisterRequest.class))).thenReturn(registerResponse);
+
+                mockMvc.perform(post("/auth/register")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isCreated())
+                                .andExpect(jsonPath("$.statusCode").value(201))
+                                .andExpect(jsonPath("$.data").doesNotExist())
+                                .andExpect(jsonPath("$.message").value("Account registered successfully. Verification OTP has been sent to your email."));
         }
 
         @Test
@@ -123,6 +142,37 @@ class AuthControllerTest {
                                 .andExpect(jsonPath("$.statusCode").value(200))
                                 .andExpect(jsonPath("$.data.accessToken").value("access-token-123"))
                                 .andExpect(jsonPath("$.data.user.email").value("user@occupify.com"));
+        }
+
+        @Test
+        void shouldVerifyOtpWhenTypeIsOmittedAndUsingCodeAlias() throws Exception {
+                UserResponse userSummary = new UserResponse(UUID.randomUUID(), "user@occupify.com", "USER", "ACTIVE",
+                                Instant.now());
+                AuthResponse authResponse = new AuthResponse("access-token-123", "refresh-token-456", userSummary);
+
+                when(authService.verifyOtp(any(VerifyOtpRequest.class))).thenReturn(authResponse);
+
+                mockMvc.perform(post("/auth/verify-otp")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"email\":\"user@occupify.com\",\"code\":\"123456\"}"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.statusCode").value(200))
+                                .andExpect(jsonPath("$.data.accessToken").value("access-token-123"));
+        }
+
+        @Test
+        void shouldVerifyOtpWithLowercaseTypeEnum() throws Exception {
+                UserResponse userSummary = new UserResponse(UUID.randomUUID(), "user@occupify.com", "USER", "ACTIVE",
+                                Instant.now());
+                AuthResponse authResponse = new AuthResponse("access-token-123", "refresh-token-456", userSummary);
+
+                when(authService.verifyOtp(any(VerifyOtpRequest.class))).thenReturn(authResponse);
+
+                mockMvc.perform(post("/auth/verify-otp")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"email\":\"user@occupify.com\",\"otpCode\":\"123456\",\"type\":\"register\"}"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.statusCode").value(200));
         }
 
         @Test
