@@ -1,6 +1,7 @@
 package com.occupify.identity.producer.impl;
 
 import com.occupify.identity.event.PasswordResetRequestedEvent;
+import com.occupify.identity.event.UserActivatedEvent;
 import com.occupify.identity.event.UserRegisteredEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,7 +31,9 @@ class UserEventProducerImplTest {
     void setUp() {
         userEventProducer = new UserEventProducerImpl(rabbitTemplate);
         ReflectionTestUtils.setField(userEventProducer, "exchange", "occupify.notification.exchange");
+        ReflectionTestUtils.setField(userEventProducer, "userExchange", "occupify.user.exchange");
         ReflectionTestUtils.setField(userEventProducer, "userRegisteredRoutingKey", "user.registered");
+        ReflectionTestUtils.setField(userEventProducer, "userActivatedRoutingKey", "user.activated");
         ReflectionTestUtils.setField(userEventProducer, "passwordResetRoutingKey", "user.password-reset");
     }
 
@@ -48,6 +51,23 @@ class UserEventProducerImplTest {
         assertEquals(userId, captured.userId());
         assertEquals("test@occupify.com", captured.email());
         assertEquals("123456", captured.otpCode());
+    }
+
+    @Test
+    void shouldPublishUserActivatedEvent() {
+        UUID userId = UUID.randomUUID();
+        UserActivatedEvent event = new UserActivatedEvent(userId, "test@occupify.com", null, "USER", "ACTIVE", Instant.now());
+
+        userEventProducer.publishUserActivated(event);
+
+        ArgumentCaptor<UserActivatedEvent> captor = ArgumentCaptor.forClass(UserActivatedEvent.class);
+        verify(rabbitTemplate).convertAndSend(eq("occupify.user.exchange"), eq("user.activated"), captor.capture());
+
+        UserActivatedEvent captured = captor.getValue();
+        assertEquals(userId, captured.userId());
+        assertEquals("test@occupify.com", captured.email());
+        assertEquals("USER", captured.role());
+        assertEquals("ACTIVE", captured.status());
     }
 
     @Test

@@ -86,7 +86,9 @@ app:
 
   rabbitmq:
     exchange: ${RABBITMQ_NOTIFICATION_EXCHANGE:occupify.notification.exchange}
+    user-exchange: ${RABBITMQ_USER_EXCHANGE:occupify.user.exchange}
     user-registered-routing-key: ${RABBITMQ_USER_REGISTERED_ROUTING_KEY:user.registered}
+    user-activated-routing-key: ${RABBITMQ_USER_ACTIVATED_ROUTING_KEY:user.activated}
     password-reset-routing-key: ${RABBITMQ_PASSWORD_RESET_ROUTING_KEY:user.password-reset}
 
   storage:
