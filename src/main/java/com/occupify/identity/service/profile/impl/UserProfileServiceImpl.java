@@ -389,7 +389,7 @@ public class UserProfileServiceImpl implements UserProfileService {
     public List<InstitutionResponse> searchInstitutions(String keyword) {
         log.debug("Searching institutions catalog with keyword: {}", keyword);
         if (keyword != null && !keyword.trim().isBlank()) {
-            return institutionRepository.findByNameContainingIgnoreCaseOrderByNameAsc(keyword.trim())
+            return institutionRepository.searchByNameOrCode(keyword.trim())
                     .stream()
                     .map(userProfileMapper::toInstitutionResponse)
                     .toList();

@@ -525,27 +525,4 @@ class UserProfileControllerTest {
                 .andExpect(jsonPath("$.data[0].name").value("Spring Boot"))
                 .andExpect(jsonPath("$.data[1].name").value("Spring Cloud"));
     }
-
-    @Test
-    @DisplayName("GET /users/me/institutions -> should return 200 OK with SingleResponse<List<InstitutionResponse>>")
-    void searchInstitutions_success_shouldReturn200AndInstitutionList() throws Exception {
-        UUID instId1 = UUID.randomUUID();
-        UUID instId2 = UUID.randomUUID();
-        List<InstitutionResponse> mockList = List.of(
-                new InstitutionResponse(instId1, "Hanoi University of Science and Technology", "HUST", "Vietnam", "Hanoi", "https://hust.edu.vn", "https://logo.com/hust.png"),
-                new InstitutionResponse(instId2, "Vietnam National University - UET", "UET", "Vietnam", "Hanoi", "https://uet.vnu.edu.vn", "https://logo.com/uet.png")
-        );
-
-        when(userProfileService.searchInstitutions("tech")).thenReturn(mockList);
-
-        mockMvc.perform(get("/users/me/institutions")
-                        .param("keyword", "tech")
-                        .accept(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.statusCode").value(200))
-                .andExpect(jsonPath("$.data").isArray())
-                .andExpect(jsonPath("$.data[0].name").value("Hanoi University of Science and Technology"))
-                .andExpect(jsonPath("$.data[0].code").value("HUST"))
-                .andExpect(jsonPath("$.data[1].name").value("Vietnam National University - UET"));
-    }
 }

@@ -236,13 +236,4 @@ public class UserProfileController extends AbstractBaseController {
         List<SkillResponse> response = userProfileService.searchSkills(keyword);
         return successSingle(response, "Skills retrieved successfully");
     }
-
-    @GetMapping("/institutions")
-    @Operation(summary = "Search educational institutions catalog", description = "Searches institutions catalog by name substring or retrieves top institutions when keyword is empty", security = @SecurityRequirement(name = OpenApiConfig.SECURITY_SCHEME_NAME))
-    public SingleResponse<List<InstitutionResponse>> searchInstitutions(
-            @Parameter(description = "Keyword to filter institution catalog by name") @RequestParam(value = "keyword", required = false) String keyword) {
-        log.debug("[GET /users/me/institutions] Searching institutions catalog with keyword: {}", keyword);
-        List<InstitutionResponse> response = userProfileService.searchInstitutions(keyword);
-        return successSingle(response, "Institutions retrieved successfully");
-    }
 }

@@ -662,7 +662,7 @@ class UserProfileServiceTest {
                 new Institution(UUID.randomUUID(), "HCMUT", "HCMUT", "Vietnam", "Ho Chi Minh City", "https://hcmut.edu.vn", null, true)
         );
 
-        when(institutionRepository.findByNameContainingIgnoreCaseOrderByNameAsc("hust")).thenReturn(List.of(institutions.get(0)));
+        when(institutionRepository.searchByNameOrCode("hust")).thenReturn(List.of(institutions.get(0)));
 
         List<InstitutionResponse> responses = userProfileService.searchInstitutions("hust");
 
