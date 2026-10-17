@@ -57,7 +57,7 @@ public class AuthServiceImpl implements AuthService {
     private static final Duration RESET_TOKEN_TTL = Duration.ofMinutes(10);
 
     private final UserRepository userRepository;
-    private final InstitutionRepository institutionRepository;
+    private final @Nullable InstitutionRepository institutionRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtils jwtUtils;
     private final StringRedisTemplate redisTemplate;
@@ -76,7 +76,7 @@ public class AuthServiceImpl implements AuthService {
     @Autowired
     public AuthServiceImpl(
             UserRepository userRepository,
-            InstitutionRepository institutionRepository,
+            @Nullable InstitutionRepository institutionRepository,
             PasswordEncoder passwordEncoder,
             JwtUtils jwtUtils,
             StringRedisTemplate redisTemplate,
@@ -127,7 +127,7 @@ public class AuthServiceImpl implements AuthService {
 
     public AuthServiceImpl(
             UserRepository userRepository,
-            InstitutionRepository institutionRepository,
+            @Nullable InstitutionRepository institutionRepository,
             PasswordEncoder passwordEncoder,
             JwtUtils jwtUtils,
             StringRedisTemplate redisTemplate,

@@ -15,6 +15,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.lang.Nullable;
 
 import java.util.List;
 import java.util.UUID;
@@ -31,7 +32,7 @@ public abstract class AbstractBaseController {
         return responseFactory.createSuccessResponse(HttpStatus.OK, message);
     }
 
-    protected <T> CreatedResponse<T> created(T data, String message) {
+    protected <T> CreatedResponse<T> created(@Nullable T data, String message) {
         return responseFactory.createCreatedResponse(HttpStatus.CREATED, message, data);
     }
 
@@ -52,7 +53,7 @@ public abstract class AbstractBaseController {
         return responseFactory.success(message);
     }
 
-    protected <T> ResponseEntity<CreatedResponse<T>> createdEntity(T data, String message) {
+    protected <T> ResponseEntity<CreatedResponse<T>> createdEntity(@Nullable T data, String message) {
         return responseFactory.created(data, message);
     }
 

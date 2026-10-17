@@ -1,13 +1,14 @@
 package com.occupify.identity.enums;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import org.springframework.lang.Nullable;
 
 public enum OtpType {
     REGISTER,
     FORGOT_PASSWORD;
 
     @JsonCreator
-    public static OtpType fromString(String value) {
+    public static @Nullable OtpType fromString(@Nullable String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
