@@ -17,9 +17,17 @@ public class RabbitMQConfig {
     @Value("${app.rabbitmq.exchange:occupify.notification.exchange}")
     private String exchangeName = "occupify.notification.exchange";
 
+    @Value("${app.rabbitmq.user-exchange:occupify.user.exchange}")
+    private String userExchangeName = "occupify.user.exchange";
+
     @Bean
     public TopicExchange notificationExchange() {
         return new TopicExchange(exchangeName, true, false);
+    }
+
+    @Bean
+    public TopicExchange userExchange() {
+        return new TopicExchange(userExchangeName, true, false);
     }
 
     @Bean
