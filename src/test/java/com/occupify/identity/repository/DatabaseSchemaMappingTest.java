@@ -41,7 +41,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Xác thực toàn diện cơ chế ánh xạ ORM (Object-Relational Mapping) của Spring Data JPA và Hibernate
  * đối với 8 bảng thực thể trong thiết kế ERD đã chuẩn hóa của dịch vụ <code>occupify-identity</code>:
  * <ul>
- *   <li><b>1. users:</b> Quản lý danh tính cốt lõi, vai trò (EMPLOYEE, EMPLOYER, ADMIN), trạng thái (ACTIVE, INACTIVE...).</li>
+ *   <li><b>1. users:</b> Quản lý danh tính cốt lõi, vai trò (USER, ADMIN), trạng thái (ACTIVE, INACTIVE...).</li>
  *   <li><b>2. experiences:</b> Kinh nghiệm làm việc gồm organization, employment_type, location_type, is_current...</li>
  *   <li><b>3. educations:</b> Học vấn gồm institution, field_of_study, degree, grade, description, mốc thời gian...</li>
  *   <li><b>4. qualifications:</b> Chứng chỉ gồm title, organization, issue_date, expiration_date, credential_id, credential_url...</li>
@@ -126,7 +126,7 @@ class DatabaseSchemaMappingTest {
      * <b>Mục tiêu kiểm thử:</b>
      * - Kiểm tra ánh xạ bảng `users`.
      * - Xác nhận tự động sinh UUID Primary Key khi lưu entity.
-     * - Xác nhận các trường Enum string (Role: EMPLOYEE / EMPLOYER, Status: ACTIVE) được lưu chuẩn xác.
+     * - Xác nhận các trường Enum string (Role: USER / ADMIN, Status: ACTIVE) được lưu chuẩn xác.
      * - Xác minh phương thức truy vấn JPA tìm kiếm theo email (findByEmail).
      */
     @Test
@@ -140,7 +140,7 @@ class DatabaseSchemaMappingTest {
         candidate.setFullName("Nguyen Van A");
         candidate.setHeadline("Senior Fullstack Developer");
         candidate.setBio("Passionate about distributed microservices and clean code.");
-        candidate.setRole(UserRole.EMPLOYEE.name());
+        candidate.setRole(UserRole.USER.name());
         candidate.setStatus(UserStatus.ACTIVE.name());
 
         // [ACT - Thực thi hành động lưu qua JPA]
@@ -156,7 +156,7 @@ class DatabaseSchemaMappingTest {
                 .as("Phải tìm thấy người dùng qua Email")
                 .isPresent();
         assertThat(queriedUser.get().getFullName()).isEqualTo("Nguyen Van A");
-        assertThat(queriedUser.get().getRole()).isEqualTo(UserRole.EMPLOYEE.name());
+        assertThat(queriedUser.get().getRole()).isEqualTo(UserRole.USER.name());
         assertThat(queriedUser.get().getStatus()).isEqualTo(UserStatus.ACTIVE.name());
     }
 
@@ -176,7 +176,7 @@ class DatabaseSchemaMappingTest {
     @DisplayName("TC02 - Profile Extensions: Lưu và truy vấn kinh nghiệm, học vấn, chứng chỉ qua User FK")
     void testProfileExtensionsPersistence() {
         // [ARRANGE - Tạo User Freelancer làm chủ thể hồ sơ]
-        User freelancer = createTestUser("candidate.profile@occupify.com", UserRole.EMPLOYEE, "Le Thi B");
+        User freelancer = createTestUser("candidate.profile@occupify.com", UserRole.USER, "Le Thi B");
 
         // [ACT 1 - Thêm Kinh nghiệm làm việc (Experience)]
         Experience experience = new Experience(
@@ -274,7 +274,7 @@ class DatabaseSchemaMappingTest {
     @DisplayName("TC03 - Skills & Composite Key: Lưu trữ kỹ năng, trình độ, thâm niên và Top Skills")
     void testSkillsAndCompositeKeyMapping() {
         // [ARRANGE - Tạo User và Danh mục kỹ năng]
-        User developer = createTestUser("dev.spring@occupify.com", UserRole.EMPLOYEE, "Pham Van C");
+        User developer = createTestUser("dev.spring@occupify.com", UserRole.USER, "Pham Van C");
 
         Skill springBootSkill = new Skill(null, "Spring Boot", "Frameworks & Backend");
         springBootSkill = skillRepository.save(springBootSkill);
@@ -327,8 +327,8 @@ class DatabaseSchemaMappingTest {
     @DisplayName("TC04 - Contract & Review: Thiết lập hợp đồng freelance và viết đánh giá nghiệm thu")
     void testContractAndReviewWorkflow() {
         // [ARRANGE - Tạo Employer và Employee riêng biệt]
-        User employer = createTestUser("company.hr@occupify.com", UserRole.EMPLOYER, "HR Director");
-        User employee = createTestUser("expert.freelancer@occupify.com", UserRole.EMPLOYEE, "Expert Freelancer");
+        User employer = createTestUser("company.hr@occupify.com", UserRole.USER, "HR Director");
+        User employee = createTestUser("expert.freelancer@occupify.com", UserRole.USER, "Expert Freelancer");
 
         // [ACT 1 - Ký kết Hợp đồng làm việc (Contract)]
         UUID crossServiceProjectRoleId = UUID.randomUUID(); // ID tham chiếu từ Project Microservice
@@ -396,7 +396,7 @@ class DatabaseSchemaMappingTest {
         employer.setPassword("hashedPassword123");
         employer.setFullName("Nguyen Van Employer");
         employer.setHeadline("Tech Founder");
-        employer.setRole(UserRole.EMPLOYER.name());
+        employer.setRole(UserRole.USER.name());
         employer.setStatus(UserStatus.ACTIVE.name());
         employer = userRepository.save(employer);
 
@@ -405,7 +405,7 @@ class DatabaseSchemaMappingTest {
         employee.setPassword("hashedPassword456");
         employee.setFullName("Tran Van Freelancer");
         employee.setHeadline("Senior Java Engineer");
-        employee.setRole(UserRole.EMPLOYEE.name());
+        employee.setRole(UserRole.USER.name());
         employee.setStatus(UserStatus.ACTIVE.name());
         employee = userRepository.save(employee);
 
