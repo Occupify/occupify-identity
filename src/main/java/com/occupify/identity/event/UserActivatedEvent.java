@@ -1,5 +1,7 @@
 package com.occupify.identity.event;
 
+import org.springframework.lang.Nullable;
+
 import java.io.Serializable;
 import java.time.Instant;
 import java.util.UUID;
@@ -7,10 +9,10 @@ import java.util.UUID;
 public record UserActivatedEvent(
         UUID userId,
         String email,
-        String fullName,
+        @Nullable String fullName,
         String role,
         String status,
-        Instant occurredAt
+        @Nullable Instant occurredAt
 ) implements Serializable {
 
     public UserActivatedEvent {

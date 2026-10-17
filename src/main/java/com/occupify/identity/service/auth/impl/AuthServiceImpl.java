@@ -493,7 +493,7 @@ public class AuthServiceImpl implements AuthService {
         userEventProducer.publishUserActivated(new UserActivatedEvent(
                 savedUser.getId(),
                 savedUser.getEmail(),
-                null,
+                savedUser.getFullName(),
                 savedUser.getRole(),
                 savedUser.getStatus(),
                 Instant.now()));
