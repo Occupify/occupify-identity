@@ -2,8 +2,13 @@ package com.occupify.identity.service.auth.impl;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
+import com.google.api.client.http.javanet.NetHttpTransport;
+import com.google.api.client.json.gson.GsonFactory;
 import com.occupify.identity.dto.request.auth.ChangePasswordRequest;
 import com.occupify.identity.dto.request.auth.ForgotPasswordRequest;
+import com.occupify.identity.dto.request.auth.GoogleLoginRequest;
 import com.occupify.identity.dto.request.auth.LoginRequest;
 import com.occupify.identity.dto.request.auth.RegisterRequest;
 import com.occupify.identity.dto.request.auth.ResetPasswordRequest;
@@ -44,6 +49,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -72,6 +78,8 @@ public class AuthServiceImpl implements AuthService {
     private final int maxAttempts;
     private final long cooldownMillis;
     private final Duration refreshTokenTtl;
+    private final String googleClientId;
+    private final @Nullable GoogleIdTokenVerifier googleIdTokenVerifier;
 
     @Autowired
     public AuthServiceImpl(
@@ -89,7 +97,32 @@ public class AuthServiceImpl implements AuthService {
             @Value("${app.otp.expiration-seconds:300}") long otpExpirationSeconds,
             @Value("${app.otp.max-attempts:3}") int maxAttempts,
             @Value("${app.otp.cooldown-seconds:60}") long cooldownSeconds,
-            @Value("${app.jwt.refresh-token-expiration:604800000}") long refreshTokenExpirationMs) {
+            @Value("${app.jwt.refresh-token-expiration:604800000}") long refreshTokenExpirationMs,
+            @Value("${app.google.client-id:}") String googleClientId) {
+        this(userRepository, institutionRepository, passwordEncoder, jwtUtils, redisTemplate,
+                revokeAllSessionsScript, objectMapper, otpUtils, userMapper, userEventProducer,
+                otpLength, otpExpirationSeconds, maxAttempts, cooldownSeconds, refreshTokenExpirationMs,
+                googleClientId, null);
+    }
+
+    public AuthServiceImpl(
+            UserRepository userRepository,
+            @Nullable InstitutionRepository institutionRepository,
+            PasswordEncoder passwordEncoder,
+            JwtUtils jwtUtils,
+            StringRedisTemplate redisTemplate,
+            RedisScript<Long> revokeAllSessionsScript,
+            ObjectMapper objectMapper,
+            OtpUtils otpUtils,
+            UserMapper userMapper,
+            UserEventProducer userEventProducer,
+            int otpLength,
+            long otpExpirationSeconds,
+            int maxAttempts,
+            long cooldownSeconds,
+            long refreshTokenExpirationMs,
+            @Nullable String googleClientId,
+            @Nullable GoogleIdTokenVerifier googleIdTokenVerifier) {
         this.userRepository = userRepository;
         this.institutionRepository = institutionRepository;
         this.passwordEncoder = passwordEncoder;
@@ -105,6 +138,32 @@ public class AuthServiceImpl implements AuthService {
         this.maxAttempts = maxAttempts;
         this.cooldownMillis = cooldownSeconds * 1000L;
         this.refreshTokenTtl = Duration.ofMillis(refreshTokenExpirationMs);
+        this.googleClientId = googleClientId != null ? googleClientId.trim() : "";
+        this.googleIdTokenVerifier = googleIdTokenVerifier != null
+                ? googleIdTokenVerifier
+                : initGoogleVerifier(this.googleClientId);
+    }
+
+    public AuthServiceImpl(
+            UserRepository userRepository,
+            @Nullable InstitutionRepository institutionRepository,
+            PasswordEncoder passwordEncoder,
+            JwtUtils jwtUtils,
+            StringRedisTemplate redisTemplate,
+            RedisScript<Long> revokeAllSessionsScript,
+            ObjectMapper objectMapper,
+            OtpUtils otpUtils,
+            UserMapper userMapper,
+            UserEventProducer userEventProducer,
+            int otpLength,
+            long otpExpirationSeconds,
+            int maxAttempts,
+            long cooldownSeconds,
+            long refreshTokenExpirationMs) {
+        this(userRepository, institutionRepository, passwordEncoder, jwtUtils, redisTemplate,
+                revokeAllSessionsScript, objectMapper, otpUtils, userMapper, userEventProducer,
+                otpLength, otpExpirationSeconds, maxAttempts, cooldownSeconds, refreshTokenExpirationMs,
+                "", null);
     }
 
     public AuthServiceImpl(
@@ -122,7 +181,8 @@ public class AuthServiceImpl implements AuthService {
             long refreshTokenExpirationMs) {
         this(userRepository, null, passwordEncoder, jwtUtils, redisTemplate,
                 revokeAllSessionsScript, objectMapper, new OtpUtils(), new UserMapper(), userEventProducer,
-                otpLength, otpExpirationSeconds, maxAttempts, cooldownSeconds, refreshTokenExpirationMs);
+                otpLength, otpExpirationSeconds, maxAttempts, cooldownSeconds, refreshTokenExpirationMs,
+                "", null);
     }
 
     public AuthServiceImpl(
@@ -141,7 +201,8 @@ public class AuthServiceImpl implements AuthService {
             long refreshTokenExpirationMs) {
         this(userRepository, institutionRepository, passwordEncoder, jwtUtils, redisTemplate,
                 revokeAllSessionsScript, objectMapper, new OtpUtils(), new UserMapper(), userEventProducer,
-                otpLength, otpExpirationSeconds, maxAttempts, cooldownSeconds, refreshTokenExpirationMs);
+                otpLength, otpExpirationSeconds, maxAttempts, cooldownSeconds, refreshTokenExpirationMs,
+                "", null);
     }
 
     private record SessionMetadata(UUID userId, String email, long createdAt) {
@@ -244,6 +305,86 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByEmail(normalizedEmail)
                 .orElseThrow(() -> new AuthException(AuthErrorCode.AUTH_003));
         authenticateUser(user, request.password());
+        return rotateUserSessionAndRespond(user);
+    }
+
+    @Override
+    @Transactional
+    public AuthResponse loginWithGoogle(GoogleLoginRequest request) {
+        if (request == null || request.idToken() == null || request.idToken().isBlank()) {
+            throw new AuthException(AuthErrorCode.AUTH_018, "Google ID token is required");
+        }
+
+        GoogleIdTokenVerifier verifier = this.googleIdTokenVerifier != null
+                ? this.googleIdTokenVerifier
+                : initGoogleVerifier(this.googleClientId);
+
+        if (verifier == null) {
+            log.error("Google OAuth client ID is not configured on the server");
+            throw new AuthException(AuthErrorCode.AUTH_018, "Google OAuth is not configured on this server");
+        }
+
+        GoogleIdToken idToken;
+        try {
+            idToken = verifier.verify(request.idToken());
+        } catch (Exception e) {
+            log.error("Exception during Google ID token verification: {}", e.getMessage(), e);
+            throw new AuthException(AuthErrorCode.AUTH_018, "Failed to verify Google ID token");
+        }
+
+        if (idToken == null) {
+            log.warn("Google ID token verification returned null (invalid signature, audience mismatch, or expired)");
+            throw new AuthException(AuthErrorCode.AUTH_018, "Invalid or expired Google token");
+        }
+
+        GoogleIdToken.Payload payload = idToken.getPayload();
+        String email = payload.getEmail();
+        if (email == null || email.isBlank()) {
+            throw new AuthException(AuthErrorCode.AUTH_000, "Google token does not contain an email address");
+        }
+
+        String normalizedEmail = EmailUtil.normalize(email);
+        String name = (String) payload.get("name");
+        String pictureUrl = (String) payload.get("picture");
+
+        Optional<User> existingUserOpt = userRepository.findByEmail(normalizedEmail);
+        User user;
+        if (existingUserOpt.isPresent()) {
+            user = existingUserOpt.get();
+            if (UserStatus.BANNED.name().equalsIgnoreCase(user.getStatus())) {
+                throw new AuthException(AuthErrorCode.USER_008);
+            }
+            boolean needsUpdate = false;
+            if (UserStatus.INACTIVE.name().equalsIgnoreCase(user.getStatus())) {
+                user.setStatus(UserStatus.ACTIVE.name());
+                needsUpdate = true;
+            }
+            if ((user.getFullName() == null || user.getFullName().isBlank()) && name != null && !name.isBlank()) {
+                user.setFullName(name);
+                needsUpdate = true;
+            }
+            if ((user.getAvatarUrl() == null || user.getAvatarUrl().isBlank()) && pictureUrl != null && !pictureUrl.isBlank()) {
+                user.setAvatarUrl(pictureUrl);
+                needsUpdate = true;
+            }
+            if (needsUpdate) {
+                user = userRepository.save(user);
+            }
+        } else {
+            user = new User(
+                    UUID.randomUUID(),
+                    normalizedEmail,
+                    passwordEncoder.encode(UUID.randomUUID().toString()),
+                    UserRole.USER.name(),
+                    UserStatus.ACTIVE.name(),
+                    Instant.now(),
+                    Instant.now());
+            user.setFullName(name);
+            user.setAvatarUrl(pictureUrl);
+            user = userRepository.save(user);
+            log.info("Registered new user [{}] via Google OAuth", normalizedEmail);
+        }
+
         return rotateUserSessionAndRespond(user);
     }
 
@@ -900,5 +1041,17 @@ public class AuthServiceImpl implements AuthService {
             cleaned = cleaned.substring("Bearer ".length()).trim();
         }
         return cleaned.isBlank() ? null : cleaned;
+    }
+
+    @Nullable
+    private GoogleIdTokenVerifier initGoogleVerifier(String clientId) {
+        if (clientId == null || clientId.isBlank()) {
+            return null;
+        }
+        return new GoogleIdTokenVerifier.Builder(
+                new NetHttpTransport(),
+                GsonFactory.getDefaultInstance())
+                .setAudience(Collections.singletonList(clientId))
+                .build();
     }
 }
