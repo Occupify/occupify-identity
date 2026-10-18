@@ -99,7 +99,8 @@ app:
       secret-key: ${S3_SECRET_KEY:}
       public-url-prefix: ${S3_PUBLIC_URL_PREFIX:}
       path-style-access-enabled: ${S3_PATH_STYLE_ACCESS_ENABLED:true}
-
+  google:
+    client-id: ${GOOGLE_CLIENT_ID:}
 scalar:
   path: ${SCALAR_PATH:/docs}
   url: ${SCALAR_URL:/v3/api-docs}
