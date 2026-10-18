@@ -29,4 +29,6 @@ app:
     exchange: occupify.notification.exchange
     user-registered-routing-key: user.registered
     password-reset-routing-key: user.password-reset
+  google:
+    client-id: test-google-client-id
 
