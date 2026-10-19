@@ -350,6 +350,7 @@ public class AuthServiceImpl implements AuthService {
 
         Optional<User> existingUserOpt = userRepository.findByEmail(normalizedEmail);
         User user;
+        boolean isNewUser = false;
         if (existingUserOpt.isPresent()) {
             user = existingUserOpt.get();
             if (UserStatus.BANNED.name().equalsIgnoreCase(user.getStatus())) {
@@ -359,6 +360,7 @@ public class AuthServiceImpl implements AuthService {
             if (UserStatus.INACTIVE.name().equalsIgnoreCase(user.getStatus())) {
                 user.setStatus(UserStatus.ACTIVE.name());
                 needsUpdate = true;
+                isNewUser = true;
             }
             if ((user.getFullName() == null || user.getFullName().isBlank()) && name != null && !name.isBlank()) {
                 user.setFullName(name);
@@ -383,7 +385,18 @@ public class AuthServiceImpl implements AuthService {
             user.setFullName(name);
             user.setAvatarUrl(pictureUrl);
             user = userRepository.save(user);
+            isNewUser = true;
             log.info("Registered new user [{}] via Google OAuth", normalizedEmail);
+        }
+
+        if (isNewUser) {
+            userEventProducer.publishUserActivated(new UserActivatedEvent(
+                    user.getId(),
+                    user.getEmail(),
+                    user.getFullName(),
+                    user.getRole(),
+                    user.getStatus(),
+                    Instant.now()));
         }
 
         return rotateUserSessionAndRespond(user);

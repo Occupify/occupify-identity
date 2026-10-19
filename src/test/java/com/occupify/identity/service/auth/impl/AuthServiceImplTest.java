@@ -612,6 +612,7 @@ class AuthServiceImplTest {
         assertNotNull(response.accessToken());
         assertNotNull(response.refreshToken());
         assertEquals("test@occupify.com", response.user().email());
+        verify(userEventProducer, never()).publishUserActivated(any());
     }
 
     @Test
@@ -649,6 +650,46 @@ class AuthServiceImplTest {
         assertNotNull(response.accessToken());
         assertEquals("newuser@occupify.com", response.user().email());
         verify(userRepository).save(any(User.class));
+        verify(userEventProducer).publishUserActivated(argThat(event ->
+                event.userId().equals(savedUser.getId())
+                        && "newuser@occupify.com".equals(event.email())
+                        && "ACTIVE".equals(event.status())
+                        && "New Google User".equals(event.fullName())));
+    }
+
+    @Test
+    void shouldActivateInactiveUserOnGoogleLoginSuccessfully() throws Exception {
+        GoogleIdTokenVerifier mockVerifier = mock(GoogleIdTokenVerifier.class);
+        GoogleIdToken mockToken = mock(GoogleIdToken.class);
+        GoogleIdToken.Payload payload = new GoogleIdToken.Payload();
+        payload.setEmail("inactive@occupify.com");
+        payload.set("name", "Inactive User");
+
+        when(mockToken.getPayload()).thenReturn(payload);
+        when(mockVerifier.verify("valid-token")).thenReturn(mockToken);
+
+        User inactiveUser = new User(UUID.randomUUID(), "inactive@occupify.com", "hash", "USER", "INACTIVE",
+                Instant.now(), Instant.now());
+        when(userRepository.findByEmail("inactive@occupify.com")).thenReturn(Optional.of(inactiveUser));
+        when(userRepository.save(any(User.class))).thenReturn(inactiveUser);
+
+        mockRedisRevokeAllSessions();
+        mockRedisSessionSave();
+
+        AuthServiceImpl googleAuthService = new AuthServiceImpl(
+                userRepository, institutionRepository, passwordEncoder, jwtUtils, redisTemplate,
+                revokeAllSessionsScript, objectMapper, new OtpUtils(), new UserMapper(), userEventProducer,
+                6, 300L, 3, 60L, 604800000L, "test-client-id", mockVerifier);
+
+        AuthResponse response = googleAuthService.loginWithGoogle(new GoogleLoginRequest("valid-token"));
+
+        assertNotNull(response);
+        assertEquals("ACTIVE", inactiveUser.getStatus());
+        verify(userRepository).save(inactiveUser);
+        verify(userEventProducer).publishUserActivated(argThat(event ->
+                event.userId().equals(inactiveUser.getId())
+                        && "inactive@occupify.com".equals(event.email())
+                        && "ACTIVE".equals(event.status())));
     }
 
     @Test
