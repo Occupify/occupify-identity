@@ -86,7 +86,9 @@ app:
 
   rabbitmq:
     exchange: ${RABBITMQ_NOTIFICATION_EXCHANGE:occupify.notification.exchange}
+    user-exchange: ${RABBITMQ_USER_EXCHANGE:occupify.user.exchange}
     user-registered-routing-key: ${RABBITMQ_USER_REGISTERED_ROUTING_KEY:user.registered}
+    user-activated-routing-key: ${RABBITMQ_USER_ACTIVATED_ROUTING_KEY:user.activated}
     password-reset-routing-key: ${RABBITMQ_PASSWORD_RESET_ROUTING_KEY:user.password-reset}
 
   storage:
@@ -99,7 +101,8 @@ app:
       secret-key: ${S3_SECRET_KEY:}
       public-url-prefix: ${S3_PUBLIC_URL_PREFIX:}
       path-style-access-enabled: ${S3_PATH_STYLE_ACCESS_ENABLED:true}
-
+  google:
+    client-id: ${GOOGLE_CLIENT_ID:}
 scalar:
   path: ${SCALAR_PATH:/docs}
   url: ${SCALAR_URL:/v3/api-docs}

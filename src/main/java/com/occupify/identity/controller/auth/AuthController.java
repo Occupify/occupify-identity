@@ -7,6 +7,7 @@ import com.occupify.identity.dto.base.SingleResponse;
 import com.occupify.identity.dto.base.SuccessResponse;
 import com.occupify.identity.dto.request.auth.ChangePasswordRequest;
 import com.occupify.identity.dto.request.auth.ForgotPasswordRequest;
+import com.occupify.identity.dto.request.auth.GoogleLoginRequest;
 import com.occupify.identity.dto.request.auth.LoginRequest;
 import com.occupify.identity.dto.request.auth.RefreshTokenRequest;
 import com.occupify.identity.dto.request.auth.RegisterRequest;
@@ -85,6 +86,14 @@ public class AuthController extends AbstractBaseController {
         log.info("[POST /auth/login] Login attempt for email: {}", request.email());
         AuthResponse data = authService.login(request);
         return successSingle(data, "Login successful");
+    }
+
+    @PostMapping("/google")
+    @Operation(summary = "Google Login", description = "Authenticate or register user using Google ID token")
+    public SingleResponse<AuthResponse> loginWithGoogle(@Valid @RequestBody GoogleLoginRequest request) {
+        log.info("[POST /auth/google] Google login attempt");
+        AuthResponse data = authService.loginWithGoogle(request);
+        return successSingle(data, "Google login successful");
     }
 
     @PostMapping("/refresh-token")

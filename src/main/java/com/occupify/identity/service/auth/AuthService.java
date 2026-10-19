@@ -2,6 +2,7 @@ package com.occupify.identity.service.auth;
 
 import com.occupify.identity.dto.request.auth.ChangePasswordRequest;
 import com.occupify.identity.dto.request.auth.ForgotPasswordRequest;
+import com.occupify.identity.dto.request.auth.GoogleLoginRequest;
 import com.occupify.identity.dto.request.auth.LoginRequest;
 import com.occupify.identity.dto.request.auth.RegisterRequest;
 import com.occupify.identity.dto.request.auth.ResetPasswordRequest;
@@ -16,6 +17,8 @@ public interface AuthService {
     UserResponse register(RegisterRequest request);
 
     AuthResponse login(LoginRequest request);
+
+    AuthResponse loginWithGoogle(GoogleLoginRequest request);
 
     AuthResponse refreshToken(String refreshToken);
 

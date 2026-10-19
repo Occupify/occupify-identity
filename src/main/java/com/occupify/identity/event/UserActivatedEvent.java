@@ -1,0 +1,23 @@
+package com.occupify.identity.event;
+
+import org.springframework.lang.Nullable;
+
+import java.io.Serializable;
+import java.time.Instant;
+import java.util.UUID;
+
+public record UserActivatedEvent(
+        UUID userId,
+        String email,
+        @Nullable String fullName,
+        String role,
+        String status,
+        @Nullable Instant occurredAt
+) implements Serializable {
+
+    public UserActivatedEvent {
+        if (occurredAt == null) {
+            occurredAt = Instant.now();
+        }
+    }
+}
