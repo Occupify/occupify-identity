@@ -25,6 +25,7 @@ import com.occupify.identity.exception.profile.ProfileErrorCode;
 import com.occupify.identity.exception.profile.ProfileException;
 import com.occupify.identity.repository.InstitutionRepository;
 import com.occupify.identity.repository.UserRepository;
+import com.occupify.identity.event.UserActivatedEvent;
 import com.occupify.identity.producer.UserEventProducer;
 import com.occupify.identity.security.JwtUtils;
 import com.occupify.identity.security.impl.JwtUtilsImpl;
@@ -292,6 +293,7 @@ class AuthServiceImplTest {
         assertNotNull(auth.refreshToken());
         assertEquals("ACTIVE", auth.user().status());
         verify(userRepository).save(any(User.class));
+        verify(userEventProducer).publishUserActivated(any(UserActivatedEvent.class));
     }
 
     @Test
@@ -314,6 +316,7 @@ class AuthServiceImplTest {
         AuthResponse auth = (AuthResponse) result;
         assertNotNull(auth.accessToken());
         assertEquals("ACTIVE", auth.user().status());
+        verify(userEventProducer).publishUserActivated(any(UserActivatedEvent.class));
     }
 
     @Test
