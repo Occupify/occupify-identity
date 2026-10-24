@@ -3,6 +3,7 @@ package com.occupify.identity.controller.auth;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.occupify.identity.dto.request.auth.ChangePasswordRequest;
 import com.occupify.identity.dto.request.auth.ForgotPasswordRequest;
+import com.occupify.identity.dto.request.auth.GoogleLoginRequest;
 import com.occupify.identity.dto.request.auth.LoginRequest;
 import com.occupify.identity.dto.request.auth.RefreshTokenRequest;
 import com.occupify.identity.dto.request.auth.RegisterRequest;
@@ -379,5 +380,35 @@ class AuthControllerTest {
                                 .andExpect(status().isUnauthorized())
                                 .andExpect(jsonPath("$.statusCode").value(401))
                                 .andExpect(jsonPath("$.errorCode").value("AUTH_003"));
+        }
+
+        @Test
+        void shouldLoginWithGoogleWith200Ok() throws Exception {
+                GoogleLoginRequest request = new GoogleLoginRequest("valid-google-id-token");
+                UUID userId = UUID.randomUUID();
+                UserResponse userResponse = new UserResponse(userId, "googleuser@occupify.com", "USER", "ACTIVE", Instant.now());
+                AuthResponse authResponse = new AuthResponse("mock-access-token", "mock-refresh-token", userResponse);
+
+                when(authService.loginWithGoogle(any(GoogleLoginRequest.class))).thenReturn(authResponse);
+
+                mockMvc.perform(post("/auth/google")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.statusCode").value(200))
+                                .andExpect(jsonPath("$.message").value("Google login successful"))
+                                .andExpect(jsonPath("$.data.accessToken").value("mock-access-token"))
+                                .andExpect(jsonPath("$.data.refreshToken").value("mock-refresh-token"))
+                                .andExpect(jsonPath("$.data.user.email").value("googleuser@occupify.com"));
+        }
+
+        @Test
+        void shouldReturn400WhenGoogleTokenIsBlank() throws Exception {
+                GoogleLoginRequest request = new GoogleLoginRequest("   ");
+
+                mockMvc.perform(post("/auth/google")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isBadRequest());
         }
 }

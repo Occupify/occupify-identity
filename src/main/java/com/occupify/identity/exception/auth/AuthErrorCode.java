@@ -26,6 +26,7 @@ public enum AuthErrorCode {
     AUTH_015("AUTH_015", "Account is already activated", HttpStatus.BAD_REQUEST),
     AUTH_016("AUTH_016", "Invalid or expired reset token", HttpStatus.BAD_REQUEST),
     AUTH_017("AUTH_017", "Confirm password is different", HttpStatus.BAD_REQUEST),
+    AUTH_018("AUTH_018", "Invalid or expired Google authentication token", HttpStatus.UNAUTHORIZED),
     USER_001("USER_001", "User account not found", HttpStatus.NOT_FOUND),
     USER_007("USER_007", "User account is inactive or locked", HttpStatus.FORBIDDEN),
     USER_008("USER_008", "User account has been banned", HttpStatus.FORBIDDEN);

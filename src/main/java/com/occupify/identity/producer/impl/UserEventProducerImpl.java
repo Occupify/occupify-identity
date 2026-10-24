@@ -1,6 +1,7 @@
 package com.occupify.identity.producer.impl;
 
 import com.occupify.identity.event.PasswordResetRequestedEvent;
+import com.occupify.identity.event.UserActivatedEvent;
 import com.occupify.identity.event.UserRegisteredEvent;
 import com.occupify.identity.producer.UserEventProducer;
 import lombok.RequiredArgsConstructor;
@@ -19,8 +20,14 @@ public class UserEventProducerImpl implements UserEventProducer {
     @Value("${app.rabbitmq.exchange:occupify.notification.exchange}")
     private String exchange = "occupify.notification.exchange";
 
+    @Value("${app.rabbitmq.user-exchange:occupify.user.exchange}")
+    private String userExchange = "occupify.user.exchange";
+
     @Value("${app.rabbitmq.user-registered-routing-key:user.registered}")
     private String userRegisteredRoutingKey = "user.registered";
+
+    @Value("${app.rabbitmq.user-activated-routing-key:user.activated}")
+    private String userActivatedRoutingKey = "user.activated";
 
     @Value("${app.rabbitmq.password-reset-routing-key:user.password-reset}")
     private String passwordResetRoutingKey = "user.password-reset";
@@ -30,6 +37,13 @@ public class UserEventProducerImpl implements UserEventProducer {
         log.info("[Event Producer] Publishing UserRegisteredEvent for user [{}] ({}) to exchange [{}] with routingKey [{}]",
                 event.userId(), event.email(), exchange, userRegisteredRoutingKey);
         rabbitTemplate.convertAndSend(exchange, userRegisteredRoutingKey, event);
+    }
+
+    @Override
+    public void publishUserActivated(UserActivatedEvent event) {
+        log.info("[Event Producer] Publishing UserActivatedEvent for user [{}] ({}) to exchange [{}] with routingKey [{}]",
+                event.userId(), event.email(), userExchange, userActivatedRoutingKey);
+        rabbitTemplate.convertAndSend(userExchange, userActivatedRoutingKey, event);
     }
 
     @Override

@@ -1,8 +1,11 @@
 package com.occupify.identity.service.auth.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
 import com.occupify.identity.dto.request.auth.ChangePasswordRequest;
 import com.occupify.identity.dto.request.auth.ForgotPasswordRequest;
+import com.occupify.identity.dto.request.auth.GoogleLoginRequest;
 import com.occupify.identity.dto.request.auth.LoginRequest;
 import com.occupify.identity.dto.request.auth.RegisterRequest;
 import com.occupify.identity.dto.request.auth.ResetPasswordRequest;
@@ -22,9 +25,12 @@ import com.occupify.identity.exception.profile.ProfileErrorCode;
 import com.occupify.identity.exception.profile.ProfileException;
 import com.occupify.identity.repository.InstitutionRepository;
 import com.occupify.identity.repository.UserRepository;
+import com.occupify.identity.event.UserActivatedEvent;
 import com.occupify.identity.producer.UserEventProducer;
 import com.occupify.identity.security.JwtUtils;
 import com.occupify.identity.security.impl.JwtUtilsImpl;
+import com.occupify.identity.util.OtpUtils;
+import com.occupify.identity.mapper.UserMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -287,6 +293,7 @@ class AuthServiceImplTest {
         assertNotNull(auth.refreshToken());
         assertEquals("ACTIVE", auth.user().status());
         verify(userRepository).save(any(User.class));
+        verify(userEventProducer).publishUserActivated(any(UserActivatedEvent.class));
     }
 
     @Test
@@ -309,6 +316,7 @@ class AuthServiceImplTest {
         AuthResponse auth = (AuthResponse) result;
         assertNotNull(auth.accessToken());
         assertEquals("ACTIVE", auth.user().status());
+        verify(userEventProducer).publishUserActivated(any(UserActivatedEvent.class));
     }
 
     @Test
@@ -557,5 +565,154 @@ class AuthServiceImplTest {
                 () -> authService.changePassword("user@occupify.com", request));
         assertEquals(AuthErrorCode.USER_001, ex.getErrorCode());
         verify(redisTemplate, never()).execute(eq(revokeAllSessionsScript), anyList());
+    }
+
+    @Test
+    void shouldThrowWhenGoogleTokenIsBlank() {
+        AuthException ex = assertThrows(AuthException.class,
+                () -> authService.loginWithGoogle(new GoogleLoginRequest("   ")));
+        assertEquals(AuthErrorCode.AUTH_018, ex.getErrorCode());
+    }
+
+    @Test
+    void shouldThrowWhenGoogleVerifierIsNotConfigured() {
+        AuthException ex = assertThrows(AuthException.class,
+                () -> authService.loginWithGoogle(new GoogleLoginRequest("some-token")));
+        assertEquals(AuthErrorCode.AUTH_018, ex.getErrorCode());
+    }
+
+    @Test
+    void shouldLoginWithGoogleSuccessfullyForExistingUser() throws Exception {
+        GoogleIdTokenVerifier mockVerifier = mock(GoogleIdTokenVerifier.class);
+        GoogleIdToken mockToken = mock(GoogleIdToken.class);
+        GoogleIdToken.Payload payload = new GoogleIdToken.Payload();
+        payload.setEmail("test@occupify.com");
+        payload.set("name", "Google User");
+        payload.set("picture", "https://example.com/avatar.jpg");
+
+        when(mockToken.getPayload()).thenReturn(payload);
+        when(mockVerifier.verify("valid-token")).thenReturn(mockToken);
+
+        User existingUser = new User(UUID.randomUUID(), "test@occupify.com", "hash", "USER", "ACTIVE",
+                Instant.now(), Instant.now());
+        when(userRepository.findByEmail("test@occupify.com")).thenReturn(Optional.of(existingUser));
+        when(userRepository.save(any(User.class))).thenReturn(existingUser);
+
+        mockRedisRevokeAllSessions();
+        mockRedisSessionSave();
+
+        AuthServiceImpl googleAuthService = new AuthServiceImpl(
+                userRepository, institutionRepository, passwordEncoder, jwtUtils, redisTemplate,
+                revokeAllSessionsScript, objectMapper, new OtpUtils(), new UserMapper(), userEventProducer,
+                6, 300L, 3, 60L, 604800000L, "test-client-id", mockVerifier);
+
+        AuthResponse response = googleAuthService.loginWithGoogle(new GoogleLoginRequest("valid-token"));
+
+        assertNotNull(response);
+        assertNotNull(response.accessToken());
+        assertNotNull(response.refreshToken());
+        assertEquals("test@occupify.com", response.user().email());
+        verify(userEventProducer, never()).publishUserActivated(any());
+    }
+
+    @Test
+    void shouldRegisterNewUserWithGoogleSuccessfully() throws Exception {
+        GoogleIdTokenVerifier mockVerifier = mock(GoogleIdTokenVerifier.class);
+        GoogleIdToken mockToken = mock(GoogleIdToken.class);
+        GoogleIdToken.Payload payload = new GoogleIdToken.Payload();
+        payload.setEmail("newuser@occupify.com");
+        payload.set("name", "New Google User");
+        payload.set("picture", "https://example.com/new-avatar.jpg");
+
+        when(mockToken.getPayload()).thenReturn(payload);
+        when(mockVerifier.verify("valid-token")).thenReturn(mockToken);
+
+        when(userRepository.findByEmail("newuser@occupify.com")).thenReturn(Optional.empty());
+        when(passwordEncoder.encode(anyString())).thenReturn("hashed-random-password");
+
+        User savedUser = new User(UUID.randomUUID(), "newuser@occupify.com", "hashed-random-password", "USER", "ACTIVE",
+                Instant.now(), Instant.now());
+        savedUser.setFullName("New Google User");
+        savedUser.setAvatarUrl("https://example.com/new-avatar.jpg");
+        when(userRepository.save(any(User.class))).thenReturn(savedUser);
+
+        mockRedisRevokeAllSessions();
+        mockRedisSessionSave();
+
+        AuthServiceImpl googleAuthService = new AuthServiceImpl(
+                userRepository, institutionRepository, passwordEncoder, jwtUtils, redisTemplate,
+                revokeAllSessionsScript, objectMapper, new OtpUtils(), new UserMapper(), userEventProducer,
+                6, 300L, 3, 60L, 604800000L, "test-client-id", mockVerifier);
+
+        AuthResponse response = googleAuthService.loginWithGoogle(new GoogleLoginRequest("valid-token"));
+
+        assertNotNull(response);
+        assertNotNull(response.accessToken());
+        assertEquals("newuser@occupify.com", response.user().email());
+        verify(userRepository).save(any(User.class));
+        verify(userEventProducer).publishUserActivated(argThat(event ->
+                event.userId().equals(savedUser.getId())
+                        && "newuser@occupify.com".equals(event.email())
+                        && "ACTIVE".equals(event.status())
+                        && "New Google User".equals(event.fullName())));
+    }
+
+    @Test
+    void shouldActivateInactiveUserOnGoogleLoginSuccessfully() throws Exception {
+        GoogleIdTokenVerifier mockVerifier = mock(GoogleIdTokenVerifier.class);
+        GoogleIdToken mockToken = mock(GoogleIdToken.class);
+        GoogleIdToken.Payload payload = new GoogleIdToken.Payload();
+        payload.setEmail("inactive@occupify.com");
+        payload.set("name", "Inactive User");
+
+        when(mockToken.getPayload()).thenReturn(payload);
+        when(mockVerifier.verify("valid-token")).thenReturn(mockToken);
+
+        User inactiveUser = new User(UUID.randomUUID(), "inactive@occupify.com", "hash", "USER", "INACTIVE",
+                Instant.now(), Instant.now());
+        when(userRepository.findByEmail("inactive@occupify.com")).thenReturn(Optional.of(inactiveUser));
+        when(userRepository.save(any(User.class))).thenReturn(inactiveUser);
+
+        mockRedisRevokeAllSessions();
+        mockRedisSessionSave();
+
+        AuthServiceImpl googleAuthService = new AuthServiceImpl(
+                userRepository, institutionRepository, passwordEncoder, jwtUtils, redisTemplate,
+                revokeAllSessionsScript, objectMapper, new OtpUtils(), new UserMapper(), userEventProducer,
+                6, 300L, 3, 60L, 604800000L, "test-client-id", mockVerifier);
+
+        AuthResponse response = googleAuthService.loginWithGoogle(new GoogleLoginRequest("valid-token"));
+
+        assertNotNull(response);
+        assertEquals("ACTIVE", inactiveUser.getStatus());
+        verify(userRepository).save(inactiveUser);
+        verify(userEventProducer).publishUserActivated(argThat(event ->
+                event.userId().equals(inactiveUser.getId())
+                        && "inactive@occupify.com".equals(event.email())
+                        && "ACTIVE".equals(event.status())));
+    }
+
+    @Test
+    void shouldThrowWhenUserIsBannedOnGoogleLogin() throws Exception {
+        GoogleIdTokenVerifier mockVerifier = mock(GoogleIdTokenVerifier.class);
+        GoogleIdToken mockToken = mock(GoogleIdToken.class);
+        GoogleIdToken.Payload payload = new GoogleIdToken.Payload();
+        payload.setEmail("banned@occupify.com");
+
+        when(mockToken.getPayload()).thenReturn(payload);
+        when(mockVerifier.verify("valid-token")).thenReturn(mockToken);
+
+        User bannedUser = new User(UUID.randomUUID(), "banned@occupify.com", "hash", "USER", "BANNED",
+                Instant.now(), Instant.now());
+        when(userRepository.findByEmail("banned@occupify.com")).thenReturn(Optional.of(bannedUser));
+
+        AuthServiceImpl googleAuthService = new AuthServiceImpl(
+                userRepository, institutionRepository, passwordEncoder, jwtUtils, redisTemplate,
+                revokeAllSessionsScript, objectMapper, new OtpUtils(), new UserMapper(), userEventProducer,
+                6, 300L, 3, 60L, 604800000L, "test-client-id", mockVerifier);
+
+        AuthException ex = assertThrows(AuthException.class,
+                () -> googleAuthService.loginWithGoogle(new GoogleLoginRequest("valid-token")));
+        assertEquals(AuthErrorCode.USER_008, ex.getErrorCode());
     }
 }

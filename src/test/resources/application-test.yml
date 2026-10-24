@@ -27,6 +27,10 @@ app:
     cooldown-seconds: 60
   rabbitmq:
     exchange: occupify.notification.exchange
+    user-exchange: occupify.user.exchange
     user-registered-routing-key: user.registered
+    user-activated-routing-key: user.activated
     password-reset-routing-key: user.password-reset
+  google:
+    client-id: test-google-client-id
 
