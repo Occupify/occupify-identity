@@ -160,3 +160,7 @@ jobs:
 
           echo "===== PORT MAPPING ====="
           podman port occupify-identity
+
+      - name: Restart API Gateway
+        run: |
+          podman restart occupify-gateway || true
