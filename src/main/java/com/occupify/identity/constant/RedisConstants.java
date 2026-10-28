@@ -16,4 +16,7 @@ public final class RedisConstants {
     // Token types
     public static final String TOKEN_TYPE_ACCESS = "ACCESS_TOKEN";
     public static final String TOKEN_TYPE_REFRESH = "REFRESH_TOKEN";
+
+    // Cache names
+    public static final String CACHE_USER_PROFILE = "user_profile";
 }
