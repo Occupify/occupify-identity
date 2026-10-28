@@ -1,4 +1,6 @@
 spring:
+  cache:
+    type: none
   sql:
     init:
       mode: never

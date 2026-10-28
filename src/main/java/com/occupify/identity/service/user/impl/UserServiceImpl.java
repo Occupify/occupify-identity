@@ -1,5 +1,6 @@
 package com.occupify.identity.service.user.impl;
 
+import com.occupify.identity.constant.RedisConstants;
 import com.occupify.identity.constant.StorageConstants;
 import com.occupify.identity.dto.request.user.UpdateUserProfileRequest;
 import com.occupify.identity.dto.response.user.AvatarResponse;
@@ -24,6 +25,8 @@ import com.occupify.identity.service.storage.StorageService;
 import com.occupify.identity.service.user.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -47,6 +50,7 @@ public class UserServiceImpl implements UserService {
     private final UserProfileMapper userProfileMapper;
 
     @Override
+    @Cacheable(value = RedisConstants.CACHE_USER_PROFILE, key = "#currentUserId")
     public UserProfileResponse getMyProfile(UUID currentUserId) {
         log.debug("Fetching user profile for userId: {}", currentUserId);
         User user = findActiveUserOrThrow(currentUserId);
@@ -69,6 +73,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
+    @CacheEvict(value = RedisConstants.CACHE_USER_PROFILE, key = "#currentUserId")
     public UserProfileResponse updateMyProfile(UUID currentUserId, UpdateUserProfileRequest request) {
         log.info("Updating profile for userId: {}", currentUserId);
         User user = findActiveUserOrThrow(currentUserId);
@@ -85,6 +90,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
+    @CacheEvict(value = RedisConstants.CACHE_USER_PROFILE, key = "#currentUserId")
     public void deleteMyAccount(UUID currentUserId) {
         log.warn("Soft deleting account for userId: {}", currentUserId);
         User user = findActiveUserOrThrow(currentUserId);
@@ -96,6 +102,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
+    @CacheEvict(value = RedisConstants.CACHE_USER_PROFILE, key = "#currentUserId")
     public AvatarResponse uploadMyAvatar(UUID currentUserId, MultipartFile file) {
         log.info("Uploading avatar for userId: {}", currentUserId);
         User user = findActiveUserOrThrow(currentUserId);
@@ -120,6 +127,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
+    @CacheEvict(value = RedisConstants.CACHE_USER_PROFILE, key = "#currentUserId")
     public void deleteMyAvatar(UUID currentUserId) {
         log.info("Deleting avatar for userId: {}", currentUserId);
         User user = findActiveUserOrThrow(currentUserId);

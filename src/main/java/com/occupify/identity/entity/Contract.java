@@ -16,6 +16,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.springframework.lang.Nullable;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -50,16 +51,16 @@ public class Contract {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "employee_id")
-    private User employee;
+    private @Nullable User employee;
 
     @Column(name = "title", length = 255)
-    private String title;
+    private @Nullable String title;
 
     @Column(name = "role", length = 100)
-    private String role;
+    private @Nullable String role;
 
     @Column(name = "freelancer_email")
-    private String freelancerEmail;
+    private @Nullable String freelancerEmail;
 
     @Column(name = "source_type", nullable = false, length = 50)
     private String sourceType;
@@ -81,10 +82,10 @@ public class Contract {
     private String paymentStatus;
 
     @Column(name = "started_at")
-    private Instant startedAt;
+    private @Nullable Instant startedAt;
 
     @Column(name = "finished_at")
-    private Instant finishedAt;
+    private @Nullable Instant finishedAt;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -94,9 +95,9 @@ public class Contract {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    public Contract(UUID id, UUID projectRoleId, User employer, User employee, String sourceType, UUID sourceId,
+    public Contract(UUID id, UUID projectRoleId, User employer, @Nullable User employee, String sourceType, UUID sourceId,
                     BigDecimal agreedRate, String salaryType, ContractStatus status, String paymentStatus,
-                    Instant startedAt, Instant finishedAt) {
+                    @Nullable Instant startedAt, @Nullable Instant finishedAt) {
         this.id = id;
         this.projectRoleId = projectRoleId;
         this.employer = employer;
@@ -111,9 +112,9 @@ public class Contract {
         this.finishedAt = finishedAt;
     }
 
-    public Contract(UUID id, UUID projectRoleId, User employer, User employee, String sourceType, UUID sourceId,
+    public Contract(UUID id, UUID projectRoleId, User employer, @Nullable User employee, String sourceType, UUID sourceId,
                     BigDecimal agreedRate, String salaryType, String status, String paymentStatus,
-                    Instant startedAt, Instant finishedAt) {
+                    @Nullable Instant startedAt, @Nullable Instant finishedAt) {
         this(id, projectRoleId, employer, employee, sourceType, sourceId, agreedRate, salaryType,
                 parseStatus(status), paymentStatus, startedAt, finishedAt);
     }
