@@ -34,10 +34,10 @@ public class ContractEventListener {
     @RabbitHandler
     public void handleContractCreated(ContractCreatedEvent event) {
         if (event == null || event.contractId() == null) {
-            log.warn("[Identity Saga] Received invalid ContractCreatedEvent");
+            log.warn("[Identity Contract Listener] Received invalid ContractCreatedEvent");
             return;
         }
-        log.info("[Identity Saga] Received ContractCreatedEvent for contractId: [{}]. Replica synchronization deferred until acceptance.",
+        log.info("[Identity Contract Listener] Received ContractCreatedEvent for contractId: [{}]. Replica synchronization deferred until acceptance.",
                 event.contractId());
         // Do not synchronize contract replica at invitation stage
     }
@@ -45,7 +45,7 @@ public class ContractEventListener {
     @Transactional
     @RabbitHandler
     public void handleContractAccepted(ContractAcceptedEvent event) {
-        log.info("[Identity Saga] Handling ContractAcceptedEvent for contractId: {}, employerId: {}, freelancerId: {}",
+        log.info("[Identity Contract Listener] Handling ContractAcceptedEvent for contractId: {}, employerId: {}, freelancerId: {}",
                 event.contractId(), event.employerId(), event.freelancerId());
 
         Contract contract = getOrCreateContract(event);
@@ -53,34 +53,34 @@ public class ContractEventListener {
         contract.setStartedAt(Instant.now());
         contractRepository.save(contract);
 
-        log.info("[Identity Saga] Successfully synchronized contract [{}] with status IN_PROGRESS", event.contractId());
+        log.info("[Identity Contract Listener] Successfully synchronized contract [{}] with status IN_PROGRESS", event.contractId());
     }
 
     @Transactional
     @RabbitHandler
     public void handleContractRejected(ContractRejectedEvent event) {
-        log.info("[Identity Saga] Handling ContractRejectedEvent for contractId: {}, reason: {}",
+        log.info("[Identity Contract Listener] Handling ContractRejectedEvent for contractId: {}, reason: {}",
                 event.contractId(), event.reason());
 
         contractRepository.findById(event.contractId()).ifPresent(contract -> {
             contract.setStatus(ContractStatus.CANCELLED);
             contract.setFinishedAt(Instant.now());
             contractRepository.save(contract);
-            log.info("[Identity Saga] Marked contract [{}] as CANCELLED", event.contractId());
+            log.info("[Identity Contract Listener] Marked contract [{}] as CANCELLED", event.contractId());
         });
     }
 
     @Transactional
     @RabbitHandler
     public void handleContractCompensation(ContractCompensationRequestedEvent event) {
-        log.warn("[Identity Saga] Handling compensation for contractId: {}, reason: {}",
+        log.warn("[Identity Contract Listener] Handling compensation for contractId: {}, reason: {}",
                 event.contractId(), event.reason());
 
         contractRepository.findById(event.contractId()).ifPresent(contract -> {
             contract.setStatus(ContractStatus.CANCELLED);
             contract.setStartedAt(null);
             contractRepository.save(contract);
-            log.info("[Identity Saga] Reverted contract [{}] to CANCELLED due to compensation", event.contractId());
+            log.info("[Identity Contract Listener] Reverted contract [{}] to CANCELLED due to compensation", event.contractId());
         });
     }
 
