@@ -6,7 +6,7 @@ COMPOSE ?= $(shell if command -v docker >/dev/null 2>&1; then echo "docker compo
 infra: 
 	@$(COMPOSE) $(ENV_FILE) up -d
 
-up: 
+up: infra
 	@./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
 
 down: 

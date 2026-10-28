@@ -35,3 +35,7 @@ Identity :8181
    |
    +----> Administration :8185
 ```
+
+---
+
+For detailed Identity Service endpoints, request/response structures, and JSON payload examples, see [API Specification](api_specification.md).

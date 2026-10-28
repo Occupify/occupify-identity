@@ -496,7 +496,7 @@ class DatabaseSchemaMappingTest {
                 UUID.randomUUID(),
                 new BigDecimal("1500.00"),
                 "MONTHLY",
-                "ACTIVE",
+                "IN_PROGRESS",
                 "ESCROWED",
                 null,
                 null
