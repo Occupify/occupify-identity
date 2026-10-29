@@ -16,6 +16,10 @@ spring:
     hibernate:
       ddl-auto: create-drop
     show-sql: false
+  rabbitmq:
+    listener:
+      simple:
+        auto-startup: false
 
 app:
   jwt:
@@ -33,6 +37,11 @@ app:
     user-registered-routing-key: user.registered
     user-activated-routing-key: user.activated
     password-reset-routing-key: user.password-reset
+    contract-exchange: occupify.contract.exchange
+    contract-queue: occupify.identity.contract.queue
+    contract-accepted-routing-key: contract.accepted
+    contract-rejected-routing-key: contract.rejected
+    contract-compensation-routing-key: contract.compensation.#
   google:
     client-id: test-google-client-id
 

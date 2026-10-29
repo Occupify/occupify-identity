@@ -90,6 +90,11 @@ app:
     user-registered-routing-key: ${RABBITMQ_USER_REGISTERED_ROUTING_KEY:user.registered}
     user-activated-routing-key: ${RABBITMQ_USER_ACTIVATED_ROUTING_KEY:user.activated}
     password-reset-routing-key: ${RABBITMQ_PASSWORD_RESET_ROUTING_KEY:user.password-reset}
+    contract-exchange: ${RABBITMQ_CONTRACT_EXCHANGE:occupify.contract.exchange}
+    contract-queue: ${RABBITMQ_CONTRACT_QUEUE:occupify.identity.contract.queue}
+    contract-accepted-routing-key: ${RABBITMQ_CONTRACT_ACCEPTED_ROUTING_KEY:contract.accepted}
+    contract-rejected-routing-key: ${RABBITMQ_CONTRACT_REJECTED_ROUTING_KEY:contract.rejected}
+    contract-compensation-routing-key: ${RABBITMQ_CONTRACT_COMPENSATION_ROUTING_KEY:contract.compensation.#}
 
   storage:
     s3:
