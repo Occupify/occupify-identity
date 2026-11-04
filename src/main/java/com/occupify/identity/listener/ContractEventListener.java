@@ -6,6 +6,7 @@ import com.occupify.identity.enums.ContractStatus;
 import com.occupify.identity.enums.UserRole;
 import com.occupify.identity.enums.UserStatus;
 import com.occupify.identity.event.ContractAcceptedEvent;
+import com.occupify.identity.event.ContractCancelledEvent;
 import com.occupify.identity.event.ContractCompensationRequestedEvent;
 import com.occupify.identity.event.ContractCompletedEvent;
 import com.occupify.identity.event.ContractCreatedEvent;
@@ -100,6 +101,24 @@ public class ContractEventListener {
             contract.setFinishedAt(event.finishedAt() != null ? event.finishedAt().toInstant(ZoneOffset.UTC) : Instant.now());
             contractRepository.save(contract);
             log.info("[Identity Contract Listener] Marked contract [{}] as COMPLETED", event.contractId());
+        });
+    }
+
+    @Transactional
+    @RabbitHandler
+    public void handleContractCancelled(ContractCancelledEvent event) {
+        if (event == null || event.contractId() == null) {
+            log.warn("[Identity Contract Listener] Received invalid ContractCancelledEvent");
+            return;
+        }
+        log.info("[Identity Contract Listener] Handling ContractCancelledEvent for contractId: {}, reason: {}",
+                event.contractId(), event.reason());
+
+        contractRepository.findById(event.contractId()).ifPresent(contract -> {
+            contract.setStatus(ContractStatus.CANCELLED);
+            contract.setFinishedAt(event.timestamp() != null ? event.timestamp().toInstant(ZoneOffset.UTC) : Instant.now());
+            contractRepository.save(contract);
+            log.info("[Identity Contract Listener] Marked contract [{}] as CANCELLED", event.contractId());
         });
     }
 
