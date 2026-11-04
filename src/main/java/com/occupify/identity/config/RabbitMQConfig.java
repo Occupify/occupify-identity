@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.occupify.identity.event.ContractAcceptedEvent;
 import com.occupify.identity.event.ContractCompensationRequestedEvent;
+import com.occupify.identity.event.ContractCompletedEvent;
 import com.occupify.identity.event.ContractCreatedEvent;
 import com.occupify.identity.event.ContractRejectedEvent;
 import java.util.HashMap;
@@ -50,6 +51,9 @@ public class RabbitMQConfig {
     @Value("${app.rabbitmq.contract-compensation-routing-key:contract.compensation.#}")
     private String contractCompensationRoutingKey = "contract.compensation.#";
 
+    @Value("${app.rabbitmq.contract-completed-routing-key:contract.completed}")
+    private String contractCompletedRoutingKey = "contract.completed";
+
     @Bean
     public TopicExchange notificationExchange() {
         return new TopicExchange(exchangeName, true, false);
@@ -91,6 +95,11 @@ public class RabbitMQConfig {
     }
 
     @Bean
+    public Binding identityContractCompletedBinding(Queue identityContractQueue, TopicExchange contractExchange) {
+        return BindingBuilder.bind(identityContractQueue).to(contractExchange).with(contractCompletedRoutingKey);
+    }
+
+    @Bean
     public MessageConverter jackson2JsonMessageConverter() {
         ObjectMapper objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
@@ -117,6 +126,10 @@ public class RabbitMQConfig {
         idClassMapping.put("com.occupify.core.event.ContractCompensationRequestedEvent", ContractCompensationRequestedEvent.class);
         idClassMapping.put("com.occupify.identity.event.ContractCompensationRequestedEvent", ContractCompensationRequestedEvent.class);
         idClassMapping.put("ContractCompensationRequestedEvent", ContractCompensationRequestedEvent.class);
+
+        idClassMapping.put("com.occupify.core.event.ContractCompletedEvent", ContractCompletedEvent.class);
+        idClassMapping.put("com.occupify.identity.event.ContractCompletedEvent", ContractCompletedEvent.class);
+        idClassMapping.put("ContractCompletedEvent", ContractCompletedEvent.class);
 
         typeMapper.setIdClassMapping(idClassMapping);
         converter.setJavaTypeMapper(typeMapper);
