@@ -8,6 +8,7 @@ import com.occupify.identity.event.ContractCompensationRequestedEvent;
 import com.occupify.identity.event.ContractCompletedEvent;
 import com.occupify.identity.event.ContractCreatedEvent;
 import com.occupify.identity.event.ContractRejectedEvent;
+import com.occupify.identity.event.ReviewCreatedEvent;
 import java.util.HashMap;
 import java.util.Map;
 import org.springframework.amqp.core.Binding;
@@ -57,6 +58,9 @@ public class RabbitMQConfig {
 
     @Value("${app.rabbitmq.contract-cancelled-routing-key:contract.cancelled}")
     private String contractCancelledRoutingKey = "contract.cancelled";
+
+    @Value("${app.rabbitmq.review-created-routing-key:review.created}")
+    private String reviewCreatedRoutingKey = "review.created";
 
     @Bean
     public TopicExchange notificationExchange() {
@@ -109,6 +113,11 @@ public class RabbitMQConfig {
     }
 
     @Bean
+    public Binding identityReviewCreatedBinding(Queue identityContractQueue, TopicExchange contractExchange) {
+        return BindingBuilder.bind(identityContractQueue).to(contractExchange).with(reviewCreatedRoutingKey);
+    }
+
+    @Bean
     public MessageConverter jackson2JsonMessageConverter() {
         ObjectMapper objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
@@ -143,6 +152,10 @@ public class RabbitMQConfig {
         idClassMapping.put("com.occupify.core.event.ContractCancelledEvent", ContractCancelledEvent.class);
         idClassMapping.put("com.occupify.identity.event.ContractCancelledEvent", ContractCancelledEvent.class);
         idClassMapping.put("ContractCancelledEvent", ContractCancelledEvent.class);
+
+        idClassMapping.put("com.occupify.core.event.ReviewCreatedEvent", ReviewCreatedEvent.class);
+        idClassMapping.put("com.occupify.identity.event.ReviewCreatedEvent", ReviewCreatedEvent.class);
+        idClassMapping.put("ReviewCreatedEvent", ReviewCreatedEvent.class);
 
         typeMapper.setIdClassMapping(idClassMapping);
         converter.setJavaTypeMapper(typeMapper);
