@@ -7,12 +7,14 @@ import com.occupify.identity.enums.UserRole;
 import com.occupify.identity.enums.UserStatus;
 import com.occupify.identity.event.ContractAcceptedEvent;
 import com.occupify.identity.event.ContractCompensationRequestedEvent;
+import com.occupify.identity.event.ContractCompletedEvent;
 import com.occupify.identity.event.ContractCreatedEvent;
 import com.occupify.identity.event.ContractRejectedEvent;
 import com.occupify.identity.repository.ContractRepository;
 import com.occupify.identity.repository.UserRepository;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -81,6 +83,23 @@ public class ContractEventListener {
             contract.setStartedAt(null);
             contractRepository.save(contract);
             log.info("[Identity Contract Listener] Reverted contract [{}] to CANCELLED due to compensation", event.contractId());
+        });
+    }
+
+    @Transactional
+    @RabbitHandler
+    public void handleContractCompleted(ContractCompletedEvent event) {
+        if (event == null || event.contractId() == null) {
+            log.warn("[Identity Contract Listener] Received invalid ContractCompletedEvent");
+            return;
+        }
+        log.info("[Identity Contract Listener] Handling ContractCompletedEvent for contractId: {}", event.contractId());
+
+        contractRepository.findById(event.contractId()).ifPresent(contract -> {
+            contract.setStatus(ContractStatus.COMPLETED);
+            contract.setFinishedAt(event.finishedAt() != null ? event.finishedAt().toInstant(ZoneOffset.UTC) : Instant.now());
+            contractRepository.save(contract);
+            log.info("[Identity Contract Listener] Marked contract [{}] as COMPLETED", event.contractId());
         });
     }
 
