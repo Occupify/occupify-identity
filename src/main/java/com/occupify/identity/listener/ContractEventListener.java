@@ -148,7 +148,26 @@ public class ContractEventListener {
         }
 
         User reviewer = userRepository.findById(event.reviewerId()).orElse(null);
+        if (reviewer == null && contract.getEmployer() != null && event.reviewerId().equals(contract.getEmployer().getId())) {
+            reviewer = contract.getEmployer();
+        }
+        if (reviewer == null && contract.getEmployee() != null && event.reviewerId().equals(contract.getEmployee().getId())) {
+            reviewer = contract.getEmployee();
+        }
+
         User reviewee = userRepository.findById(event.revieweeId()).orElse(null);
+        if (reviewee == null && contract.getEmployer() != null && event.revieweeId().equals(contract.getEmployer().getId())) {
+            reviewee = contract.getEmployer();
+        }
+        if (reviewee == null && contract.getEmployee() != null && event.revieweeId().equals(contract.getEmployee().getId())) {
+            reviewee = contract.getEmployee();
+        }
+
+        if (reviewer == null || reviewee == null) {
+            log.warn("[Identity Contract Listener] Cannot find reviewer [{}] or reviewee [{}] for review [{}], skipping replica creation",
+                    event.reviewerId(), event.revieweeId(), event.reviewId());
+            return;
+        }
 
         Review review = new Review(
                 event.reviewId(),
