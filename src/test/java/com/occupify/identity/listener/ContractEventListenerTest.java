@@ -1,10 +1,14 @@
 package com.occupify.identity.listener;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.occupify.identity.entity.Contract;
+import com.occupify.identity.entity.Review;
 import com.occupify.identity.entity.User;
 import com.occupify.identity.enums.ContractStatus;
 import com.occupify.identity.enums.UserRole;
@@ -13,7 +17,9 @@ import com.occupify.identity.event.ContractAcceptedEvent;
 import com.occupify.identity.event.ContractCompensationRequestedEvent;
 import com.occupify.identity.event.ContractCreatedEvent;
 import com.occupify.identity.event.ContractRejectedEvent;
+import com.occupify.identity.event.ReviewCreatedEvent;
 import com.occupify.identity.repository.ContractRepository;
+import com.occupify.identity.repository.ReviewRepository;
 import com.occupify.identity.repository.UserRepository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -35,6 +41,9 @@ class ContractEventListenerTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private ReviewRepository reviewRepository;
 
     @InjectMocks
     private ContractEventListener contractEventListener;
@@ -109,5 +118,66 @@ class ContractEventListenerTest {
         assertThat(contract.getStatus()).isEqualTo(ContractStatus.CANCELLED);
         assertThat(contract.getStartedAt()).isNull();
         verify(contractRepository).save(contract);
+    }
+
+    @Test
+    @DisplayName("Should successfully replicate review on ReviewCreatedEvent")
+    void handleReviewCreated_Success() {
+        UUID reviewId = UUID.randomUUID();
+        User employer = new User(employerId, "emp@occupify.local", "hash", UserRole.USER.name(), UserStatus.ACTIVE.name(), null, null);
+        User employee = new User(freelancerId, "free@occupify.local", "hash", UserRole.USER.name(), UserStatus.ACTIVE.name(), null, null);
+        Contract contract = new Contract(contractId, jobId, employer, employee, "JOB_BID", jobId, BigDecimal.ZERO, "FIXED", ContractStatus.COMPLETED, "PENDING", null, null);
+
+        when(reviewRepository.existsById(reviewId)).thenReturn(false);
+        when(contractRepository.findById(contractId)).thenReturn(Optional.of(contract));
+        when(userRepository.findById(employerId)).thenReturn(Optional.of(employer));
+        when(userRepository.findById(freelancerId)).thenReturn(Optional.of(employee));
+
+        ReviewCreatedEvent event = new ReviewCreatedEvent(
+                UUID.randomUUID(), reviewId, contractId, employerId, "Employer",
+                freelancerId, "Freelancer", "free@occupify.local", 5, "Great work", LocalDateTime.now());
+
+        contractEventListener.handleReviewCreated(event);
+
+        verify(reviewRepository).save(any(Review.class));
+    }
+
+    @Test
+    @DisplayName("Should throw IllegalStateException when contract is not found on ReviewCreatedEvent")
+    void handleReviewCreated_ThrowsWhenContractNotFound() {
+        UUID reviewId = UUID.randomUUID();
+        when(reviewRepository.existsById(reviewId)).thenReturn(false);
+        when(contractRepository.findById(contractId)).thenReturn(Optional.empty());
+
+        ReviewCreatedEvent event = new ReviewCreatedEvent(
+                UUID.randomUUID(), reviewId, contractId, employerId, "Employer",
+                freelancerId, "Freelancer", "free@occupify.local", 5, "Great work", LocalDateTime.now());
+
+        assertThatThrownBy(() -> contractEventListener.handleReviewCreated(event))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Cannot find contract");
+
+        verify(reviewRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Should throw IllegalStateException when reviewer or reviewee is not found on ReviewCreatedEvent")
+    void handleReviewCreated_ThrowsWhenUserNotFound() {
+        UUID reviewId = UUID.randomUUID();
+        Contract contract = new Contract(contractId, jobId, null, null, "JOB_BID", jobId, BigDecimal.ZERO, "FIXED", ContractStatus.COMPLETED, "PENDING", null, null);
+
+        when(reviewRepository.existsById(reviewId)).thenReturn(false);
+        when(contractRepository.findById(contractId)).thenReturn(Optional.of(contract));
+        when(userRepository.findById(employerId)).thenReturn(Optional.empty());
+
+        ReviewCreatedEvent event = new ReviewCreatedEvent(
+                UUID.randomUUID(), reviewId, contractId, employerId, "Employer",
+                freelancerId, "Freelancer", "free@occupify.local", 5, "Great work", LocalDateTime.now());
+
+        assertThatThrownBy(() -> contractEventListener.handleReviewCreated(event))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Cannot find reviewer");
+
+        verify(reviewRepository, never()).save(any());
     }
 }

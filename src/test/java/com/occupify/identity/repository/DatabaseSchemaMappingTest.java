@@ -350,8 +350,9 @@ class DatabaseSchemaMappingTest {
         assertThat(contract.getId()).isNotNull();
 
         // [ACT 2 - Employer viết Đánh giá nghiệm thu (Review) cho Employee]
+        UUID reviewId = UUID.randomUUID();
         Review review = new Review(
-                null,
+                reviewId,
                 contract,
                 employer, // Reviewer: Nhà tuyển dụng
                 employee, // Reviewee: Freelancer
@@ -359,7 +360,7 @@ class DatabaseSchemaMappingTest {
                 "Dự án hoàn thành xuất sắc, đúng tiến độ và chất lượng mã nguồn rất cao!"
         );
         review = reviewRepository.save(review);
-        assertThat(review.getId()).isNotNull();
+        assertThat(review.getId()).isEqualTo(reviewId);
 
         // [ASSERT - Kiểm tra truy vấn Hợp đồng và Đánh giá]
         List<Contract> employerContracts = contractRepository.findByEmployerId(employer.getId());
@@ -509,8 +510,9 @@ class DatabaseSchemaMappingTest {
         assertThat(contracts.get(0).getProjectRoleId()).isEqualTo(externalProjectRoleId);
 
         // --- BƯỚC 5: Tạo Đánh giá (Review) sau khi hoàn tất Hợp đồng ---
+        UUID reviewId = UUID.randomUUID();
         Review review = new Review(
-                null,
+                reviewId,
                 contract,
                 employer,
                 employee,
@@ -518,7 +520,7 @@ class DatabaseSchemaMappingTest {
                 "Outstanding backend delivery! Highly recommended."
         );
         review = reviewRepository.save(review);
-        assertThat(review.getId()).isNotNull();
+        assertThat(review.getId()).isEqualTo(reviewId);
 
         List<Review> reviews = reviewRepository.findByContractId(contract.getId());
         assertThat(reviews).hasSize(1);

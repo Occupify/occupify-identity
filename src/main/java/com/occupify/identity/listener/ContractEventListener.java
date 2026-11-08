@@ -143,8 +143,8 @@ public class ContractEventListener {
 
         Contract contract = contractRepository.findById(event.contractId()).orElse(null);
         if (contract == null) {
-            log.warn("[Identity Contract Listener] Cannot find contract [{}] for review [{}], skipping", event.contractId(), event.reviewId());
-            return;
+            log.warn("[Identity Contract Listener] Cannot find contract [{}] for review [{}], throwing to retry", event.contractId(), event.reviewId());
+            throw new IllegalStateException("Cannot find contract [" + event.contractId() + "] for review [" + event.reviewId() + "]. Retrying.");
         }
 
         User reviewer = userRepository.findById(event.reviewerId()).orElse(null);
@@ -164,9 +164,9 @@ public class ContractEventListener {
         }
 
         if (reviewer == null || reviewee == null) {
-            log.warn("[Identity Contract Listener] Cannot find reviewer [{}] or reviewee [{}] for review [{}], skipping replica creation",
+            log.warn("[Identity Contract Listener] Cannot find reviewer [{}] or reviewee [{}] for review [{}], throwing to retry",
                     event.reviewerId(), event.revieweeId(), event.reviewId());
-            return;
+            throw new IllegalStateException("Cannot find reviewer [" + event.reviewerId() + "] or reviewee [" + event.revieweeId() + "] for review [" + event.reviewId() + "]. Retrying.");
         }
 
         Review review = new Review(

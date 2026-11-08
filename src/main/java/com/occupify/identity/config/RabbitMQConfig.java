@@ -13,6 +13,7 @@ import java.util.HashMap;
 import java.util.Map;
 import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.BindingBuilder;
+import org.springframework.amqp.core.DirectExchange;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.core.QueueBuilder;
 import org.springframework.amqp.core.TopicExchange;
@@ -62,6 +63,15 @@ public class RabbitMQConfig {
     @Value("${app.rabbitmq.review-created-routing-key:review.created}")
     private String reviewCreatedRoutingKey = "review.created";
 
+    @Value("${app.rabbitmq.contract-dlx:occupify.identity.dlx}")
+    private String contractDlxName = "occupify.identity.dlx";
+
+    @Value("${app.rabbitmq.contract-dlq:occupify.identity.contract.dlq}")
+    private String contractDlqName = "occupify.identity.contract.dlq";
+
+    @Value("${app.rabbitmq.contract-dlq-routing-key:identity.contract.dlq}")
+    private String contractDlqRoutingKey = "identity.contract.dlq";
+
     @Bean
     public TopicExchange notificationExchange() {
         return new TopicExchange(exchangeName, true, false);
@@ -78,8 +88,26 @@ public class RabbitMQConfig {
     }
 
     @Bean
+    public DirectExchange identityContractDlx() {
+        return new DirectExchange(contractDlxName, true, false);
+    }
+
+    @Bean
+    public Queue identityContractDlq() {
+        return QueueBuilder.durable(contractDlqName).build();
+    }
+
+    @Bean
+    public Binding identityContractDlqBinding(Queue identityContractDlq, DirectExchange identityContractDlx) {
+        return BindingBuilder.bind(identityContractDlq).to(identityContractDlx).with(contractDlqRoutingKey);
+    }
+
+    @Bean
     public Queue identityContractQueue() {
-        return QueueBuilder.durable(contractQueueName).build();
+        return QueueBuilder.durable(contractQueueName)
+                .deadLetterExchange(contractDlxName)
+                .deadLetterRoutingKey(contractDlqRoutingKey)
+                .build();
     }
 
     @Bean

@@ -61,6 +61,14 @@ spring:
     port: ${RABBITMQ_PORT:5672}
     username: ${RABBITMQ_USER:guest}
     password: ${RABBITMQ_PASSWORD:guest}
+    listener:
+      simple:
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          initial-interval: 1000ms
+          max-attempts: 3
+          multiplier: 2.0
 
 management:
   endpoints:
@@ -95,6 +103,9 @@ app:
     contract-accepted-routing-key: ${RABBITMQ_CONTRACT_ACCEPTED_ROUTING_KEY:contract.accepted}
     contract-rejected-routing-key: ${RABBITMQ_CONTRACT_REJECTED_ROUTING_KEY:contract.rejected}
     contract-compensation-routing-key: ${RABBITMQ_CONTRACT_COMPENSATION_ROUTING_KEY:contract.compensation.#}
+    contract-dlx: ${RABBITMQ_CONTRACT_DLX:occupify.identity.dlx}
+    contract-dlq: ${RABBITMQ_CONTRACT_DLQ:occupify.identity.contract.dlq}
+    contract-dlq-routing-key: ${RABBITMQ_CONTRACT_DLQ_ROUTING_KEY:identity.contract.dlq}
 
   storage:
     s3:
