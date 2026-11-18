@@ -101,7 +101,7 @@ jobs:
           AWS_REGION: ${{ secrets.AWS_REGION || 'ap-southeast-1' }}
           AWS_SECRET_IDENTITY_ID: ${{ secrets.AWS_SECRET_IDENTITY || 'occupify/prod/identity' }}
         run: |
-          mkdir -p ~/.config/systemd/user/git-ops/services/identity
+          mkdir -p ~/.config/systemd/user/git-ops/compose/identity
           mkdir -p ~/.config/systemd/user/git-ops/env
 
           echo "Inject identity.env from AWS Secrets Manager..."
@@ -112,7 +112,7 @@ jobs:
             --output text > ~/.config/systemd/user/git-ops/env/identity.env
 
           echo "Sync identity manifests and systemd units..."
-          cp -rf services/identity ~/.config/systemd/user/git-ops/services/
+          cp -rf compose/identity ~/.config/systemd/user/git-ops/compose/
           cp service/occupify-*-identity.service ~/.config/systemd/user/
 
       - name: Deploy Identity Service
